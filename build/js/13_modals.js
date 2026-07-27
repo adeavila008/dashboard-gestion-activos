@@ -36,10 +36,16 @@ function openChartExpandModal(canvasId) {
   openModal(title, hint, '<div class="modal-chart-wrap"><canvas id="modal-expand-canvas"></canvas></div>');
 
   if (STATE.charts["modal-expand-canvas"]) STATE.charts["modal-expand-canvas"].destroy();
+  // OJO: "src.options" es el objeto de opciones ya RESUELTO/mezclado con los
+  // defaults que usa Chart.js internamente para dibujar (un proxy de solo
+  // lectura) -- no sirve para pasarlo de nuevo como config a un Chart nuevo
+  // (queda vacio/roto y el canvas no dibuja nada). Lo que hay que reusar es
+  // "src.config.options", que es la config ORIGINAL tal como se le paso a
+  // upsertChart() (con sus scales, plugins, callbacks, etc. intactos).
   STATE.charts["modal-expand-canvas"] = new Chart(document.getElementById("modal-expand-canvas"), {
     type: src.config.type,
     data: src.data,
-    options: Object.assign({}, src.options, { responsive: true, maintainAspectRatio: false }),
+    options: Object.assign({}, src.config.options, { responsive: true, maintainAspectRatio: false }),
   });
 }
 
