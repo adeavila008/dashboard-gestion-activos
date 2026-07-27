@@ -10,6 +10,61 @@ function openModal(title, sub, bodyHtml) {
 }
 function closeModal() {
   document.getElementById("modal-overlay").classList.remove("open");
+  document.getElementById("modal-box").classList.remove("modal-box-lg");
+  if (STATE.charts["modal-expand-canvas"]) {
+    STATE.charts["modal-expand-canvas"].destroy();
+    delete STATE.charts["modal-expand-canvas"];
+  }
+}
+
+/**
+ * Boton "Ampliar" (⤢) de cada tarjeta: antes solo hacia scroll hasta la
+ * misma tarjeta (sin cambiar nada de tamaño, por eso "no servia"). Ahora
+ * abre la grafica en un modal grande, reconstruyendo un Chart.js nuevo con
+ * la MISMA config/datos/interacciones de la grafica original (asi que el
+ * clic para ver detalle sigue funcionando tambien dentro del modal).
+ */
+function openChartExpandModal(canvasId) {
+  const src = STATE.charts[canvasId];
+  if (!src) { showToast("Ampliar", "Todavía no hay datos para mostrar en esta gráfica.", "warning"); return; }
+  const canvasEl = document.getElementById(canvasId);
+  const card = canvasEl.closest(".card");
+  const title = card ? (card.querySelector(".card-title")?.textContent || "Gráfica") : "Gráfica";
+  const hint = card ? (card.querySelector(".card-hint")?.textContent || "") : "";
+
+  document.getElementById("modal-box").classList.add("modal-box-lg");
+  openModal(title, hint, '<div class="modal-chart-wrap"><canvas id="modal-expand-canvas"></canvas></div>');
+
+  if (STATE.charts["modal-expand-canvas"]) STATE.charts["modal-expand-canvas"].destroy();
+  STATE.charts["modal-expand-canvas"] = new Chart(document.getElementById("modal-expand-canvas"), {
+    type: src.config.type,
+    data: src.data,
+    options: Object.assign({}, src.options, { responsive: true, maintainAspectRatio: false }),
+  });
+}
+
+/** Igual que openChartExpandModal pero para la matriz de costos (es una
+ * tabla, no un canvas): clona la tabla ya renderizada en un modal grande
+ * con más alto/ancho, y vuelve a enganchar el clic en cada celda. */
+function openMatrixExpandModal() {
+  const rows = getFilteredIBRows({ ignoreMes: true });
+  const { cuentas, periodos, matrix } = buildCostMatrix(rows);
+  if (!cuentas.length) { showToast("Ampliar", "No hay datos de costos para los filtros actuales.", "warning"); return; }
+
+  const theadHtml = document.querySelector("#tbl-matrix thead").innerHTML;
+  const tbodyHtml = document.querySelector("#tbl-matrix tbody").innerHTML;
+  document.getElementById("modal-box").classList.add("modal-box-lg");
+  openModal(
+    "Matriz mensual de costos por cuenta mayor",
+    "clic en un valor para ver el detalle · aumentos inusuales resaltados en rojo",
+    `<div class="table-wrap table-wrap-scroll-modal-lg"><table class="matrix-table"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table></div>`
+  );
+  document.querySelectorAll("#modal-body td.mval").forEach(td => {
+    td.addEventListener("click", () => {
+      const cuenta = td.dataset.cuenta, periodo = Number(td.dataset.periodo);
+      openMatrixCellModal(cuenta, periodo, matrix, periodos);
+    });
+  });
 }
 
 function miniTxTable(rows, limit) {

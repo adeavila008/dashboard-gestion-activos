@@ -79,8 +79,9 @@ function wireNav() {
 
   document.querySelectorAll(".icon-btn[data-expand]").forEach(btn => {
     btn.addEventListener("click", () => {
-      const canvas = document.getElementById(btn.dataset.expand);
-      if (canvas) canvas.closest(".card, .table-wrap").scrollIntoView({ behavior: "smooth", block: "center" });
+      const target = btn.dataset.expand;
+      if (target === "matrix-costos") openMatrixExpandModal();
+      else openChartExpandModal(target);
     });
   });
 }
