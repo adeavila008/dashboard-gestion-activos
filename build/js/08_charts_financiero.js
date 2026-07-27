@@ -35,6 +35,49 @@ function truncateLabel(s, n) {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
+/**
+ * Costos directos vs otros costos, segun el campo "Eri_est (T)" que trae el
+ * IBReport contable (ver costoCategoria() en 01_config.js).
+ */
+function renderCostoCategorias(rows) {
+  const costos = rows.filter(r => !r.esIngreso);
+  const directos = costos.filter(r => costoCategoria(r) === "directo");
+  const otros = costos.filter(r => costoCategoria(r) !== "directo");
+  const totalDirectos = sumBy(directos, r => r.importe);
+  const totalOtros = sumBy(otros, r => r.importe);
+  const total = totalDirectos + totalOtros;
+  const pctDirectos = total ? (totalDirectos / total) * 100 : 0;
+  const pctOtros = total ? (totalOtros / total) * 100 : 0;
+
+  const grid = document.getElementById("costo-cat-grid");
+  if (!grid) return;
+  grid.innerHTML = `
+    <div class="costo-cat-block clickable" data-cat="directo" style="--accent:${PALETTE.danger}">
+      <div class="l">Costos directos <span class="text-faint" style="font-weight:500;">· Gastos de personal</span></div>
+      <div class="v">${fmtCOP(totalDirectos)}</div>
+      <div class="p">${fmtPct(pctDirectos, 0)} del total de costos · ${directos.length} transacciones</div>
+    </div>
+    <div class="costo-cat-block clickable" data-cat="otro" style="--accent:${PALETTE.violet}">
+      <div class="l">Otros costos <span class="text-faint" style="font-weight:500;">· estructura / operación</span></div>
+      <div class="v">${fmtCOP(totalOtros)}</div>
+      <div class="p">${fmtPct(pctOtros, 0)} del total de costos · ${otros.length} transacciones</div>
+    </div>`;
+
+  const bar = document.getElementById("costo-cat-bar");
+  if (bar) {
+    bar.innerHTML = `
+      <div class="costo-cat-bar-fill" style="width:${pctDirectos}%;background:${PALETTE.danger}" title="Directos: ${fmtPct(pctDirectos, 0)}"></div>
+      <div class="costo-cat-bar-fill" style="width:${pctOtros}%;background:${PALETTE.violet}" title="Otros: ${fmtPct(pctOtros, 0)}"></div>`;
+  }
+
+  grid.querySelectorAll(".costo-cat-block").forEach(elx => {
+    elx.addEventListener("click", () => {
+      const cat = elx.dataset.cat;
+      openCostoCategoriaModal(cat, cat === "directo" ? directos : otros, total);
+    });
+  });
+}
+
 function renderChartTrend() {
   const rows = getFilteredIBRows({ ignoreMes: true });
   const serie = monthlySeries(rows);

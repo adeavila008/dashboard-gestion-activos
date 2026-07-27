@@ -133,6 +133,7 @@ function parseIBReportWorkbook(workbook) {
     const dirVal = row[idxMap.direccion];
     if (normText(dirVal) !== targetDir) continue;
     const rec = {
+      eriEst: idxMap.eriEst !== undefined ? row[idxMap.eriEst] : null,
       direccion: dirVal,
       cuentaMayorCod: row[idxMap.cuentaMayorCod],
       cuentaMayor: row[idxMap.cuentaMayor],

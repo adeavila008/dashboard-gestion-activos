@@ -13,6 +13,26 @@ const CFG = {
   monthNamesLong: ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"],
 };
 
+/* ---------- Clasificacion Costos Directos vs Otros Costos ----------
+   El IBReport contable trae, por transaccion, el campo "Eri_est (T)" con
+   la clasificacion OFICIAL de la Direccion: "01 Ingresos", "02 Costos
+   Directos" o "03 Otros Costos". Esa es la fuente de verdad (no una
+   suposicion por cuenta mayor): en los datos reales, por ejemplo, TODOS los
+   Gastos de Personal quedan como Costo Directo y el resto (viajes,
+   honorarios, servicios, arrendamientos, impuestos, depreciacion, etc.)
+   como Otros Costos. Si algun Excel cargado no trae esa columna (formatos
+   viejos), se usa como respaldo el mismo criterio por cuenta mayor. */
+const COSTO_DIRECTO_FALLBACK_CODES = new Set(["7405"]); // Gastos de Personal
+function costoCategoria(row) {
+  const raw = row && row.eriEst;
+  if (raw) {
+    const n = normText(raw);
+    if (n.indexOf("COSTOS DIRECTOS") !== -1) return "directo";
+    if (n.indexOf("OTROS COSTOS") !== -1) return "otro";
+  }
+  return COSTO_DIRECTO_FALLBACK_CODES.has(String(row && row.cuentaMayorCod)) ? "directo" : "otro";
+}
+
 const PALETTE = {
   primary: "#f0a63a",
   primary2: "#ffbf5e",

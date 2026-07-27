@@ -49,6 +49,7 @@ function renderFinanciero(opts) {
   const rows = getFilteredIBRows();
   if (!opts.skipHeavy) {
     renderFinancieroKPIs(rows);
+    renderCostoCategorias(rows);
     renderChartTrend();
     renderChartCuentaMayor(rows);
     renderChartMargen();

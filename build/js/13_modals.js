@@ -59,6 +59,34 @@ function openCuentaBreakdownModal(item, kindLabel) {
   openModal(item.label, kindLabel, body);
 }
 
+function openCostoCategoriaModal(cat, rows, totalAmbasCategorias) {
+  const total = sumBy(rows, r => r.importe);
+  const porCuenta = costosPorCuentaMayor(rows);
+  const cuentasHtml = porCuenta.map(d => `
+    <div class="gerente-row"><span class="name">${escapeHtml(d.label)}</span><span class="pct">${fmtCOP(d.value)} · ${fmtPct(total ? d.value / total * 100 : 0, 0)}</span></div>`).join("");
+  const porEmpleado = costoPorPersonal(rows).slice(0, 8);
+  const empHtml = porEmpleado.length ? `
+    <div class="section-title" style="font-size:12px;margin:14px 0 6px;">Personal involucrado</div>
+    <div class="gerente-list">${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}</div>` : "";
+
+  const body = `
+    <div class="modal-kpis">
+      <div class="modal-kpi"><div class="l">Total</div><div class="v">${fmtCOP(total)}</div></div>
+      <div class="modal-kpi"><div class="l">% del total de costos</div><div class="v">${fmtPct(totalAmbasCategorias ? total / totalAmbasCategorias * 100 : 0)}</div></div>
+      <div class="modal-kpi"><div class="l"># Transacciones</div><div class="v">${rows.length}</div></div>
+    </div>
+    <div class="section-title" style="font-size:12px;margin-bottom:6px;">Cuentas mayores incluidas</div>
+    <div class="gerente-list">${cuentasHtml || '<div class="text-faint" style="font-size:12px;">Sin cuentas para este filtro.</div>'}</div>
+    ${empHtml}
+    <div class="mt-8"></div>
+    ${miniTxTable(rows, 80)}`;
+  openModal(
+    cat === "directo" ? "Costos directos" : "Otros costos",
+    "Clasificación oficial del IBReport (campo Eri_est) · según los filtros activos",
+    body
+  );
+}
+
 function openMatrixCellModal(cuenta, periodo, matrix, periodos) {
   const rows = getFilteredIBRows({ ignoreMes: true }).filter(r => !r.esIngreso && r.cuentaMayor === cuenta && r.periodo === periodo);
   const idx = periodos.indexOf(periodo);

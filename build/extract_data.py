@@ -69,6 +69,7 @@ def extract_ibreport():
     idx = {h: i for i, h in enumerate(headers)}
 
     key_map = {
+        "Eri_est (T)": "eriEst",
         "Direccion_linea (T)": "direccion",
         "Cuenta_mayor": "cuentaMayorCod",
         "Cuenta_mayor (T)": "cuentaMayor",
