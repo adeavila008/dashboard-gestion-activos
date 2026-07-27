@@ -44,13 +44,14 @@ function renderChartTrend() {
     data: {
       labels,
       datasets: [
-        { label: "Ingresos", data: serie.map(s => s.ingresos), backgroundColor: colorWithAlpha(PALETTE.secondary, .85), borderRadius: 5, maxBarThickness: 28, order: 2 },
-        { label: "Costos", data: serie.map(s => s.costos), backgroundColor: colorWithAlpha(PALETTE.danger, .8), borderRadius: 5, maxBarThickness: 28, order: 2 },
-        { label: "Margen %", data: serie.map(s => s.margenPct), type: "line", yAxisID: "y1", borderColor: PALETTE.primary, backgroundColor: PALETTE.primary, tension: .35, pointRadius: 3, pointBackgroundColor: PALETTE.primary, order: 1 },
+        { label: "Ingresos", data: serie.map(s => s.ingresos), backgroundColor: colorWithAlpha(PALETTE.secondary, .85), borderRadius: 5, maxBarThickness: 28, order: 2, datalabels: dlCompactCurrency(PALETTE.secondary) },
+        { label: "Costos", data: serie.map(s => s.costos), backgroundColor: colorWithAlpha(PALETTE.danger, .8), borderRadius: 5, maxBarThickness: 28, order: 2, datalabels: dlCompactCurrency(PALETTE.danger) },
+        { label: "Margen %", data: serie.map(s => s.margenPct), type: "line", yAxisID: "y1", borderColor: PALETTE.primary, backgroundColor: PALETTE.primary, tension: .35, pointRadius: 3, pointBackgroundColor: PALETTE.primary, order: 1, datalabels: dlPercent(PALETTE.primary, 0, { align: "top", offset: 8 }) },
       ],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 24 } },
       interaction: { mode: "index", intersect: false },
       onClick: (evt, els, chart) => {
         const pts = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
@@ -77,7 +78,7 @@ function renderChartCuentaMayor(rows) {
     type: "doughnut",
     data: {
       labels: data.map(d => d.label),
-      datasets: [{ data: data.map(d => d.value), backgroundColor: PALETTE.chartSeries, borderColor: "#111827", borderWidth: 2, hoverOffset: 6 }],
+      datasets: [{ data: data.map(d => d.value), backgroundColor: PALETTE.chartSeries, borderColor: "#111827", borderWidth: 2, hoverOffset: 6, datalabels: dlDonutPct(4) }],
     },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: "62%",
@@ -107,13 +108,14 @@ function renderChartMargen() {
     data: {
       labels,
       datasets: [
-        { label: "Margen mensual %", data: serie.map(s => s.margenPct), borderColor: PALETTE.primary, backgroundColor: colorWithAlpha(PALETTE.primary, .12), fill: true, tension: .35, pointRadius: 3 },
-        { label: "Margen acumulado %", data: acumPct, borderColor: PALETTE.secondary, backgroundColor: "transparent", borderDash: [5, 3], tension: .35, pointRadius: 2 },
+        { label: "Margen mensual %", data: serie.map(s => s.margenPct), borderColor: PALETTE.primary, backgroundColor: colorWithAlpha(PALETTE.primary, .12), fill: true, tension: .35, pointRadius: 3, datalabels: dlPercent(PALETTE.primary, 0, { align: "top", offset: 6 }) },
+        { label: "Margen acumulado %", data: acumPct, borderColor: PALETTE.secondary, backgroundColor: "transparent", borderDash: [5, 3], tension: .35, pointRadius: 2, datalabels: dlPercent(PALETTE.secondary, 0, { align: "bottom", offset: 6 }) },
         { label: "Meta " + CFG.metaMargen + "%", data: serie.map(() => CFG.metaMargen), borderColor: PALETTE.textDim, borderDash: [2, 3], pointRadius: 0, borderWidth: 1 },
       ],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 20, bottom: 14 } },
       onClick: (evt, els, chart) => {
         const pts = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
         if (!pts.length) return;
@@ -129,9 +131,10 @@ function renderChartPersonal(rows) {
   const data = costoPorPersonal(rows).slice(0, 10);
   upsertChart("chart-personal", {
     type: "bar",
-    data: { labels: data.map(d => truncateLabel(d.label, 20)), datasets: [{ label: "Costo", data: data.map(d => d.value), backgroundColor: colorWithAlpha(PALETTE.violet, .85), borderRadius: 5, maxBarThickness: 22 }] },
+    data: { labels: data.map(d => truncateLabel(d.label, 20)), datasets: [{ label: "Costo", data: data.map(d => d.value), backgroundColor: colorWithAlpha(PALETTE.violet, .85), borderRadius: 5, maxBarThickness: 22, datalabels: dlCompactCurrency(PALETTE.violet, { anchor: "end", align: "right", offset: 4 }) }] },
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: 34 } },
       onClick: (evt, els, chart) => {
         const pts = chart.getElementsAtEventForMode(evt, "nearest", { intersect: true }, true);
         if (!pts.length) return;
@@ -150,9 +153,10 @@ function renderChartIngresos(rows) {
   const data = ingresosPorConcepto(rows).slice(0, 10);
   upsertChart("chart-ingresos", {
     type: "bar",
-    data: { labels: data.map(d => truncateLabel(d.label, 24)), datasets: [{ label: "Ingresos", data: data.map(d => d.value), backgroundColor: colorWithAlpha(PALETTE.secondary, .85), borderRadius: 5, maxBarThickness: 26 }] },
+    data: { labels: data.map(d => truncateLabel(d.label, 24)), datasets: [{ label: "Ingresos", data: data.map(d => d.value), backgroundColor: colorWithAlpha(PALETTE.secondary, .85), borderRadius: 5, maxBarThickness: 26, datalabels: dlCompactCurrency(PALETTE.secondary) }] },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 22 } },
       onClick: (evt, els, chart) => {
         const pts = chart.getElementsAtEventForMode(evt, "nearest", { intersect: true }, true);
         if (!pts.length) return;
@@ -168,9 +172,10 @@ function renderChartTopCuentas(rows) {
   const data = topCuentasCosto(rows).slice(0, 10);
   upsertChart("chart-topcuentas", {
     type: "bar",
-    data: { labels: data.map(d => truncateLabel(d.label, 24)), datasets: [{ label: "Costo", data: data.map(d => d.value), backgroundColor: colorWithAlpha(PALETTE.danger, .8), borderRadius: 5, maxBarThickness: 26 }] },
+    data: { labels: data.map(d => truncateLabel(d.label, 24)), datasets: [{ label: "Costo", data: data.map(d => d.value), backgroundColor: colorWithAlpha(PALETTE.danger, .8), borderRadius: 5, maxBarThickness: 26, datalabels: dlCompactCurrency(PALETTE.danger) }] },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 22 } },
       onClick: (evt, els, chart) => {
         const pts = chart.getElementsAtEventForMode(evt, "nearest", { intersect: true }, true);
         if (!pts.length) return;

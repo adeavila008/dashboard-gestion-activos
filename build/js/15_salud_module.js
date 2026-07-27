@@ -131,11 +131,12 @@ function renderCurvaSAvance(project) {
       labels,
       datasets: [
         { label: "Avance planeado %", data: serie.map(s => s.avancePlan !== null ? s.avancePlan * 100 : null), borderColor: PALETTE.textDim, borderDash: [5, 3], tension: .3, pointRadius: 2, spanGaps: true },
-        { label: "Avance real %", data: serie.map(s => s.avanceReal !== null ? s.avanceReal * 100 : null), borderColor: PALETTE.primary, backgroundColor: colorWithAlpha(PALETTE.primary, .12), fill: true, tension: .3, pointRadius: 3, spanGaps: true },
+        { label: "Avance real %", data: serie.map(s => s.avanceReal !== null ? s.avanceReal * 100 : null), borderColor: PALETTE.primary, backgroundColor: colorWithAlpha(PALETTE.primary, .12), fill: true, tension: .3, pointRadius: 3, spanGaps: true, datalabels: dlPercent(PALETTE.primary, 0, { align: "top", offset: 6 }) },
       ],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 18 } },
       onClick: (evt, els, chart) => {
         const pts = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
         if (!pts.length) return;
@@ -157,11 +158,12 @@ function renderCurvaSCosto(project) {
       labels,
       datasets: [
         { label: "Costo planeado acum. (MCOP)", data: serie.map(s => s.costoPlanAcum), borderColor: PALETTE.textDim, borderDash: [5, 3], tension: .3, pointRadius: 2, spanGaps: true },
-        { label: "Costo real acum. (MCOP)", data: serie.map(s => s.costoRealAcum), borderColor: PALETTE.danger, backgroundColor: colorWithAlpha(PALETTE.danger, .12), fill: true, tension: .3, pointRadius: 3, spanGaps: true },
+        { label: "Costo real acum. (MCOP)", data: serie.map(s => s.costoRealAcum), borderColor: PALETTE.danger, backgroundColor: colorWithAlpha(PALETTE.danger, .12), fill: true, tension: .3, pointRadius: 3, spanGaps: true, datalabels: dlNum(PALETTE.danger, 0, { align: "top", offset: 6 }) },
       ],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 18 } },
       onClick: (evt, els, chart) => {
         const pts = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
         if (!pts.length) return;
@@ -182,13 +184,14 @@ function renderCPISPIChart(project) {
     data: {
       labels,
       datasets: [
-        { label: "CPI", data: serie.map(s => s.cpi), borderColor: PALETTE.primary, tension: .3, pointRadius: 3, spanGaps: true },
-        { label: "SPI", data: serie.map(s => s.spi), borderColor: PALETTE.secondary, tension: .3, pointRadius: 3, spanGaps: true },
+        { label: "CPI", data: serie.map(s => s.cpi), borderColor: PALETTE.primary, tension: .3, pointRadius: 3, spanGaps: true, datalabels: dlNum(PALETTE.primary, 2, { align: "top", offset: 6 }) },
+        { label: "SPI", data: serie.map(s => s.spi), borderColor: PALETTE.secondary, tension: .3, pointRadius: 3, spanGaps: true, datalabels: dlNum(PALETTE.secondary, 2, { align: "bottom", offset: 6 }) },
         { label: "Meta 1.0", data: serie.map(() => 1), borderColor: PALETTE.textDim, borderDash: [2, 3], pointRadius: 0, borderWidth: 1 },
       ],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 18, bottom: 14 } },
       onClick: (evt, els, chart) => {
         const pts = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
         if (!pts.length) return;

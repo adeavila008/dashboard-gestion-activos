@@ -26,6 +26,7 @@ function kpiCard(opts) {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${opts.trend >= 0 ? '<path d="M6 15l6-6 6 6"/>' : '<path d="M6 9l6 6 6-6"/>'}</svg>
       ${Math.abs(opts.trend).toFixed(1)}%
     </span>`;
+  const formulaHtml = opts.formula ? `<div class="kpi-formula" title="${escapeHtml(opts.formulaTitle || "")}">${opts.formula}</div>` : "";
   return `
   <div class="kpi-card" style="--accent:${opts.color};--accent-soft:${colorWithAlpha(opts.color, .14)};--accent-glow:${colorWithAlpha(opts.color, .16)}">
     <div class="kpi-top">
@@ -35,6 +36,7 @@ function kpiCard(opts) {
     <div class="kpi-label">${opts.label}</div>
     <div class="kpi-value">${opts.value}</div>
     <div class="kpi-foot">${opts.foot || ""}</div>
+    ${formulaHtml}
   </div>`;
 }
 
@@ -61,6 +63,11 @@ function renderFinancieroKPIs(rows) {
   wrap.innerHTML =
     kpiCard({ label: "Ingresos", value: fmtCOP(kpi.ingresos), icon: ICONS.ingresos, color: PALETTE.secondary, trend: trendIngresos, foot: kpi.count + " transacciones en el filtro" }) +
     kpiCard({ label: "Costos", value: fmtCOP(kpi.costos), icon: ICONS.costos, color: PALETTE.danger, trend: trendCostos !== null ? -trendCostos : null, foot: "vs. mes anterior (serie completa)" }) +
-    kpiCard({ label: "Margen", value: fmtCOP(kpi.margen), icon: ICONS.margen, color: PALETTE.primary, trend: trendMargen, foot: kpi.margen >= 0 ? "Resultado positivo" : "Resultado negativo" }) +
+    kpiCard({
+      label: "Margen", value: fmtCOP(kpi.margen), icon: ICONS.margen, color: PALETTE.primary, trend: trendMargen,
+      foot: kpi.margen >= 0 ? "Resultado positivo" : "Resultado negativo",
+      formula: `Margen = Ingresos − Costos<br><b>${fmtCompact(kpi.ingresos)}</b> − <b>${fmtCompact(kpi.costos)}</b> = <b>${fmtCompact(kpi.margen)}</b>`,
+      formulaTitle: `${fmtCOP(kpi.ingresos)} − ${fmtCOP(kpi.costos)} = ${fmtCOP(kpi.margen)}`,
+    }) +
     kpiCard({ label: "Margen %", value: fmtPct(kpi.margenPct), icon: ICONS.margenPct, color: kpi.margenPct >= CFG.metaMargen ? PALETTE.success : PALETTE.warning, trend: trendMargenPct, foot: "meta ≥ " + CFG.metaMargen + "%" });
 }

@@ -42,4 +42,65 @@ if (typeof Chart !== "undefined") {
   Chart.defaults.plugins.tooltip.titleFont = { weight: "700", size: 12 };
   Chart.defaults.plugins.tooltip.cornerRadius = 8;
   Chart.defaults.plugins.tooltip.displayColors = true;
+
+  // chartjs-plugin-datalabels se auto-registra en TODAS las graficas al
+  // cargarse; lo apagamos por defecto y lo activamos explicitamente por
+  // dataset (ver DL_* helpers abajo) para controlar donde y como se ve.
+  if (typeof ChartDataLabels !== "undefined") {
+    Chart.register(ChartDataLabels);
+    Chart.defaults.plugins.datalabels = Chart.defaults.plugins.datalabels || {};
+    Chart.defaults.plugins.datalabels.display = false;
+  }
+}
+
+/* ---------- Helpers de etiquetas de datos (chartjs-plugin-datalabels) ----------
+   Estilo "pill" discreto: texto pequeno, color acorde a la serie, fondo
+   semitransparente solo para legibilidad sobre las lineas de la grilla.
+   Se aplican por dataset (dataset.datalabels = DL_xxx(...)) para poder
+   apagarlas selectivamente en lineas de meta/plan y evitar saturar el chart. */
+function dlBase(color, extra) {
+  return Object.assign({
+    display: "auto",           // deja que Chart.js oculte las que no caben (evita solapes)
+    color: color || "#eef1f8",
+    backgroundColor: colorWithAlpha(color || "#0b1220", .16),
+    borderRadius: 4,
+    padding: { top: 2, bottom: 2, left: 5, right: 5 },
+    font: { size: 10, weight: "600" },
+  }, extra || {});
+}
+function dlCompactCurrency(color, extra) {
+  return dlBase(color, Object.assign({
+    anchor: "end", align: "end", offset: 4,
+    formatter: v => (v === null || v === undefined) ? "" : fmtCompact(v),
+  }, extra || {}));
+}
+function dlPercent(color, dec, extra) {
+  return dlBase(color, Object.assign({
+    anchor: "end", align: "top", offset: 3,
+    formatter: v => (v === null || v === undefined) ? "" : fmtPct(v, dec === undefined ? 1 : dec),
+  }, extra || {}));
+}
+function dlNum(color, dec, extra) {
+  return dlBase(color, Object.assign({
+    anchor: "end", align: "top", offset: 3,
+    formatter: v => (v === null || v === undefined) ? "" : fmtNum(v, dec === undefined ? 2 : dec),
+  }, extra || {}));
+}
+function dlDonutPct(minPctToShow) {
+  const min = minPctToShow === undefined ? 4 : minPctToShow;
+  return {
+    display: ctx => {
+      const arr = ctx.dataset.data;
+      const total = arr.reduce((a, b) => a + (Number(b) || 0), 0);
+      const v = Number(arr[ctx.dataIndex]) || 0;
+      return total ? (v / total * 100) >= min : false;
+    },
+    color: "#0b1220",
+    font: { size: 10.5, weight: "700" },
+    formatter: (v, ctx) => {
+      const arr = ctx.dataset.data;
+      const total = arr.reduce((a, b) => a + (Number(b) || 0), 0);
+      return total ? (v / total * 100).toFixed(0) + "%" : "";
+    },
+  };
 }
