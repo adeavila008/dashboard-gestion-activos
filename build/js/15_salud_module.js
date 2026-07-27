@@ -50,16 +50,45 @@ function populateSaludFilterOptions() {
   selA.innerHTML = '<option value="">Año: todos</option>' + anios.map(a => `<option value="${a}">${a}</option>`).join("");
   selA.value = anios.includes(Number(STATE.saludFilters.anio)) ? STATE.saludFilters.anio : "";
 
-  const meses = uniqueSorted(STATE.baseline.rows.map(r => r.mes ? r.mes.getTime() : null)).filter(Boolean).sort((a, b) => a - b);
-  const selM = document.getElementById("s-mes");
-  selM.innerHTML = '<option value="">Mes de corte: más reciente</option>' + meses.map(t => `<option value="${t}">${new Date(t).toLocaleDateString("es-CO", { year: "numeric", month: "long" })}</option>`).join("");
-  selM.value = meses.includes(Number(STATE.saludFilters.mes)) ? STATE.saludFilters.mes : "";
+  populateSaludMesOptions();
 }
 
+/**
+ * El "Mes de corte" solo debe ofrecer los meses que existen dentro del
+ * Año/Proyecto ya seleccionados (antes listaba TODOS los meses de TODOS los
+ * proyectos sin importar el filtro de Año, por lo que elegir "2026" seguia
+ * mostrando meses de 2024 o 2027 en el desplegable).
+ */
+function populateSaludMesOptions() {
+  let rows = STATE.baseline.rows;
+  if (STATE.saludFilters.anio) rows = rows.filter(r => String(r.anio) === String(STATE.saludFilters.anio));
+  if (STATE.saludFilters.proyecto) rows = rows.filter(r => r.cecoCod === STATE.saludFilters.proyecto);
+
+  const meses = uniqueSorted(rows.map(r => r.mes ? r.mes.getTime() : null)).filter(Boolean).sort((a, b) => a - b);
+  const selM = document.getElementById("s-mes");
+  selM.innerHTML = '<option value="">Mes de corte: más reciente</option>' + meses.map(t => `<option value="${t}">${new Date(t).toLocaleDateString("es-CO", { year: "numeric", month: "long" })}</option>`).join("");
+  const valid = meses.includes(Number(STATE.saludFilters.mes));
+  selM.value = valid ? STATE.saludFilters.mes : "";
+  // si el mes que estaba elegido ya no aplica al nuevo Año/Proyecto, limpia
+  // tambien el estado (antes quedaba "" en pantalla pero seguia filtrando
+  // con el timestamp viejo por debajo, dando resultados incongruentes).
+  if (!valid) STATE.saludFilters.mes = "";
+}
+
+/**
+ * Devuelve { row, stale }. "stale" = true cuando el proyecto NO tiene un
+ * registro exactamente en el mes de corte elegido (ej. el proyecto ya
+ * termino antes de esa fecha, o todavia no habia iniciado): en ese caso se
+ * muestra el ultimo mes disponible de ESE proyecto, pero se marca para que
+ * no parezca que todos los proyectos estan reportando el mismo corte.
+ */
 function rowAtCutoff(rows, cutoffTs) {
-  if (!cutoffTs) return lastReportedRow(rows);
+  if (!cutoffTs) return { row: lastReportedRow(rows), stale: false };
   const filtered = rows.filter(r => r.mes && r.mes.getTime() <= Number(cutoffTs));
-  return filtered.length ? filtered[filtered.length - 1] : lastReportedRow(rows);
+  if (!filtered.length) return { row: lastReportedRow(rows), stale: true };
+  const row = filtered[filtered.length - 1];
+  const stale = !row.mes || row.mes.getTime() !== Number(cutoffTs);
+  return { row, stale };
 }
 
 function renderSemaforoTable() {
@@ -74,14 +103,18 @@ function renderSemaforoTable() {
     return;
   }
   tbody.innerHTML = projects.map(p => {
-    const row = rowAtCutoff(p.rows, cutoff);
+    const { row, stale } = rowAtCutoff(p.rows, cutoff);
     const cpi = pick(row.cpi), spi = pick(row.spi);
     const avanceReal = pick(row.avanceReal), avancePlan = pick(row.avancePlanLB3, row.avancePlanLB2, row.avancePlanLB1);
     const sem = semaforoEstado(cpi, spi);
+    const mesLabel = row.mes ? row.mes.toLocaleDateString("es-CO", { year: "numeric", month: "short" }) : "—";
+    const mesCell = (cutoff && stale)
+      ? `<span class="text-faint" title="Este proyecto no tiene reporte en el mes de corte seleccionado; se muestra su último mes disponible.">${mesLabel} <span style="color:var(--warning);">⚠</span></span>`
+      : mesLabel;
     return `<tr class="clickable" data-ceco="${escapeHtml(p.ceco)}">
       <td>${escapeHtml(truncateLabel(p.nombre, 30))}</td>
       <td>${escapeHtml(p.gerente || "—")}</td>
-      <td>${row.mes ? row.mes.toLocaleDateString("es-CO", { year: "numeric", month: "short" }) : "—"}</td>
+      <td>${mesCell}</td>
       <td class="num">${avanceReal !== null ? fmtPct(avanceReal * 100, 0) : "—"}</td>
       <td class="num">${avancePlan !== null ? fmtPct(avancePlan * 100, 0) : "—"}</td>
       <td class="num">${cpi !== null ? cpi.toFixed(2) : "—"}</td>
@@ -251,8 +284,8 @@ function renderSalud() {
 }
 
 function wireSaludFilters() {
-  document.getElementById("s-proyecto").addEventListener("change", e => { STATE.saludFilters.proyecto = e.target.value; STATE.saludSelectedProject = e.target.value || null; renderSalud(); });
-  document.getElementById("s-anio").addEventListener("change", e => { STATE.saludFilters.anio = e.target.value; renderSalud(); });
+  document.getElementById("s-proyecto").addEventListener("change", e => { STATE.saludFilters.proyecto = e.target.value; STATE.saludSelectedProject = e.target.value || null; populateSaludMesOptions(); renderSalud(); });
+  document.getElementById("s-anio").addEventListener("change", e => { STATE.saludFilters.anio = e.target.value; populateSaludMesOptions(); renderSalud(); });
   document.getElementById("s-mes").addEventListener("change", e => { STATE.saludFilters.mes = e.target.value; renderSalud(); });
   document.getElementById("btn-clear-filters-salud").addEventListener("click", () => {
     STATE.saludFilters = { proyecto: "", anio: "", mes: "" };

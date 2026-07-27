@@ -39,15 +39,41 @@ const IB_HEADER_MAP = {
   "EMPRESA": "empresa",
 };
 
+/**
+ * Convierte un serial de Excel, un string "YYYY-MM-DD" o un objeto Date a un
+ * Date LOCAL a medianoche.
+ *
+ * OJO: `new Date("2025-11-01")` lo interpreta el motor de JS como UTC
+ * medianoche (asi lo dice el estandar ECMA-262 para strings solo-fecha). Si
+ * luego se lee con metodos locales (getMonth/getFullYear/toLocaleDateString,
+ * que es lo que se usa en todo el dashboard), en cualquier timezone negativo
+ * (Colombia es UTC-5) esa fecha se muestra un dia antes de lo real. Como en
+ * "Indicadores GA" el campo Mes siempre es el dia 1 de cada mes, ese
+ * corrimiento de un dia hace que el mes completo se vea corrido hacia atras
+ * (ej. "2025-11-01" aparece como "octubre de 2025"), lo que rompe el filtro
+ * de "Mes de corte" y las curvas S. Por eso aqui SIEMPRE se construye la
+ * fecha con new Date(year, month-1, day) (constructor local), nunca via el
+ * parser de strings ISO.
+ */
 function excelSerialToDate(v) {
-  if (v instanceof Date) return v;
+  if (v instanceof Date) {
+    // ya es un Date; si viene de un new Date("YYYY-MM-DD") previo puede tener
+    // el mismo corrimiento, asi que se reconstruye a partir de sus
+    // componentes UTC (que es donde realmente quedo guardada la fecha
+    // "intencionada") como fecha local.
+    return new Date(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate());
+  }
   if (typeof v === "number") {
     // fecha serial de Excel (base 1899-12-30)
-    return new Date(Math.round((v - 25569) * 86400 * 1000));
+    const ms = Math.round((v - 25569) * 86400 * 1000);
+    const utc = new Date(ms);
+    return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
   }
   if (typeof v === "string" && v.trim()) {
+    const m = v.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     const d = new Date(v);
-    if (!isNaN(d.getTime())) return d;
+    if (!isNaN(d.getTime())) return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
   }
   return null;
 }
@@ -58,7 +84,7 @@ function loadDefaultIBReport() {
   return payload.rows.map(r => {
     const rec = {};
     cols.forEach((c, i) => rec[c] = r[i]);
-    if (rec.fecha) rec.fecha = new Date(rec.fecha);
+    if (rec.fecha) rec.fecha = excelSerialToDate(rec.fecha);
     return rec;
   });
 }
@@ -66,9 +92,9 @@ function loadDefaultIBReport() {
 function loadDefaultBaseline() {
   return (window.__DEFAULT_BASELINE__ || []).map(r => {
     const rec = Object.assign({}, r);
-    if (rec.mes) rec.mes = new Date(rec.mes);
-    if (rec.fechaInicio) rec.fechaInicio = new Date(rec.fechaInicio);
-    if (rec.fechaFin) rec.fechaFin = new Date(rec.fechaFin);
+    if (rec.mes) rec.mes = excelSerialToDate(rec.mes);
+    if (rec.fechaInicio) rec.fechaInicio = excelSerialToDate(rec.fechaInicio);
+    if (rec.fechaFin) rec.fechaFin = excelSerialToDate(rec.fechaFin);
     return rec;
   });
 }
