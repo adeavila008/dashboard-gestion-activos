@@ -18,8 +18,8 @@ function miniTxTable(rows, limit) {
   const rowsHtml = shown.map(r => `
     <tr>
       <td>${fmtDate(r.fecha)}</td>
-      <td>${escapeHtml(truncateLabel(r.descripcion, 40))}</td>
-      <td>${escapeHtml(truncateLabel(r.tercero, 22))}</td>
+      <td class="cell-wrap">${escapeHtml(r.descripcion || "—")}</td>
+      <td class="cell-wrap">${escapeHtml(r.tercero || "—")}</td>
       <td>${escapeHtml(r.empleado || "—")}</td>
       <td class="num" style="color:${r.esIngreso ? "var(--secondary)" : "var(--text)"}">${fmtCOP(r.importe)}</td>
     </tr>`).join("");

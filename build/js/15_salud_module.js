@@ -127,7 +127,7 @@ function renderSemaforoTable() {
       ? `<span class="text-faint" title="Este proyecto no tiene reporte en el mes de corte seleccionado; se muestra su último mes disponible.">${mesLabel} <span style="color:var(--warning);">⚠</span></span>`
       : mesLabel;
     return `<tr class="clickable" data-ceco="${escapeHtml(p.ceco)}">
-      <td>${escapeHtml(truncateLabel(p.nombre, 30))}</td>
+      <td class="cell-wrap">${escapeHtml(p.nombre)}</td>
       <td>${escapeHtml(p.gerente || "—")}</td>
       <td>${mesCell}</td>
       <td class="num">${avanceReal !== null ? fmtPct(avanceReal * 100, 0) : "—"}</td>

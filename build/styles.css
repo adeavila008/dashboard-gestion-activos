@@ -316,6 +316,7 @@ thead th{
   letter-spacing:.04em;border-bottom:1px solid var(--border);white-space:nowrap;z-index:2;
 }
 tbody td{padding:8px 11px;border-bottom:1px solid var(--border-soft);color:var(--text-dim);white-space:nowrap;}
+.cell-wrap{white-space:normal !important;max-width:320px;word-break:break-word;line-height:1.4;}
 tbody tr:hover td{background:var(--surface-2);color:var(--text);}
 tbody tr.clickable{cursor:pointer;}
 .num{text-align:right;font-variant-numeric:tabular-nums;font-family:'JetBrains Mono',monospace;font-size:11.5px;}

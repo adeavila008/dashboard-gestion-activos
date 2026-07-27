@@ -55,7 +55,7 @@ function renderMatrix(rows) {
       const isAnom = anomalies.has(c + "|" + p);
       return `<td class="mval${isAnom ? " anomaly" : ""}" data-cuenta="${escapeHtml(c)}" data-periodo="${p}">${v ? fmtCompact(v) : "—"}</td>`;
     }).join("");
-    return `<tr><th class="rowhead">${escapeHtml(truncateLabel(c, 30))}</th>${cells}<td class="num" style="font-weight:700;">${fmtCompact(rowTotal)}</td></tr>`;
+    return `<tr><th class="rowhead">${escapeHtml(c)}</th>${cells}<td class="num" style="font-weight:700;">${fmtCompact(rowTotal)}</td></tr>`;
   }).join("");
 
   tbody.querySelectorAll("td.mval").forEach(td => {

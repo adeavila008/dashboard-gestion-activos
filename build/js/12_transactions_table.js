@@ -19,12 +19,12 @@ function renderTransactionsTable(rows, opts) {
     tbody.innerHTML = pageRows.map(r => `
       <tr>
         <td>${fmtDate(r.fecha)}</td>
-        <td>${escapeHtml(truncateLabel(r.proyecto, 22))}</td>
+        <td class="cell-wrap">${escapeHtml(r.proyecto || "—")}</td>
         <td>${escapeHtml(r.tipo || "—")}</td>
-        <td>${escapeHtml(truncateLabel(r.cuentaMayor, 20))}</td>
-        <td>${escapeHtml(truncateLabel(r.cuenta, 22))}</td>
-        <td>${escapeHtml(truncateLabel(r.descripcion, 34))}</td>
-        <td>${escapeHtml(truncateLabel(r.tercero, 22))}</td>
+        <td>${escapeHtml(r.cuentaMayor || "—")}</td>
+        <td>${escapeHtml(r.cuenta || "—")}</td>
+        <td class="cell-wrap">${escapeHtml(r.descripcion || "—")}</td>
+        <td class="cell-wrap">${escapeHtml(r.tercero || "—")}</td>
         <td>${escapeHtml(r.empleado || "—")}</td>
         <td class="num" style="color:${r.esIngreso ? "var(--secondary)" : "var(--text)"}">${fmtCOP(r.importe)}</td>
       </tr>`).join("");
