@@ -4,6 +4,21 @@
 
 function pick(...vals) { for (const v of vals) if (v !== null && v !== undefined && v !== "") return v; return null; }
 
+/**
+ * La columna "Año" del Excel de indicadores solo viene diligenciada para
+ * BDA III; en Cerrejón, ESSA, Luminarias y Transformadores queda vacía en
+ * TODAS sus filas (se ve en el archivo fuente: el bloque de "Gerencia"
+ * tampoco se llenó para esos proyectos nuevos). Si el filtro de Año se basa
+ * en esa columna, esos 4 proyectos desaparecen apenas se elige un año,
+ * aunque sí tengan meses reales dentro de ese año. Por eso el año se deriva
+ * siempre de "Mes" (que sí está poblado en el 100% de las filas), y "anio"
+ * solo se usa como respaldo si por algún motivo "mes" no se pudo parsear.
+ */
+function rowYear(r) {
+  if (r.mes) return r.mes.getFullYear();
+  return r.anio !== null && r.anio !== undefined && r.anio !== "" ? Number(r.anio) : null;
+}
+
 function semaforoEstado(cpi, spi) {
   if (cpi === null || spi === null) return { level: "neutral", label: "Sin datos" };
   if (cpi >= CFG.metaCPI_SPI && spi >= CFG.metaCPI_SPI) return { level: "green", label: "En control" };
@@ -45,7 +60,7 @@ function populateSaludFilterOptions() {
   selP.innerHTML = '<option value="">Proyecto: todos</option>' + projects.map(p => `<option value="${escapeHtml(p.ceco)}">${escapeHtml(truncateLabel(p.nombre, 34))}</option>`).join("");
   selP.value = projects.some(p => p.ceco === curP) ? curP : "";
 
-  const anios = uniqueSorted(STATE.baseline.rows.map(r => r.anio)).sort((a, b) => b - a);
+  const anios = uniqueSorted(STATE.baseline.rows.map(rowYear)).sort((a, b) => b - a);
   const selA = document.getElementById("s-anio");
   selA.innerHTML = '<option value="">Año: todos</option>' + anios.map(a => `<option value="${a}">${a}</option>`).join("");
   selA.value = anios.includes(Number(STATE.saludFilters.anio)) ? STATE.saludFilters.anio : "";
@@ -61,7 +76,7 @@ function populateSaludFilterOptions() {
  */
 function populateSaludMesOptions() {
   let rows = STATE.baseline.rows;
-  if (STATE.saludFilters.anio) rows = rows.filter(r => String(r.anio) === String(STATE.saludFilters.anio));
+  if (STATE.saludFilters.anio) rows = rows.filter(r => rowYear(r) === Number(STATE.saludFilters.anio));
   if (STATE.saludFilters.proyecto) rows = rows.filter(r => r.cecoCod === STATE.saludFilters.proyecto);
 
   const meses = uniqueSorted(rows.map(r => r.mes ? r.mes.getTime() : null)).filter(Boolean).sort((a, b) => a - b);
@@ -93,7 +108,7 @@ function rowAtCutoff(rows, cutoffTs) {
 
 function renderSemaforoTable() {
   let projects = getBaselineProjects();
-  if (STATE.saludFilters.anio) projects = projects.map(p => ({ ...p, rows: p.rows.filter(r => String(r.anio) === String(STATE.saludFilters.anio)) })).filter(p => p.rows.length);
+  if (STATE.saludFilters.anio) projects = projects.map(p => ({ ...p, rows: p.rows.filter(r => rowYear(r) === Number(STATE.saludFilters.anio)) })).filter(p => p.rows.length);
   if (STATE.saludFilters.proyecto) projects = projects.filter(p => p.ceco === STATE.saludFilters.proyecto);
 
   const cutoff = STATE.saludFilters.mes || null;
