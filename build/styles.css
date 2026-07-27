@@ -294,6 +294,7 @@ input[type=file]{display:none;}
 
 /* ---------- tables ---------- */
 .table-wrap{overflow:auto;border-radius:var(--radius-md);border:1px solid var(--border-soft);}
+.table-wrap-scroll{max-height:420px;overflow-y:auto;}
 table{width:100%;border-collapse:collapse;font-size:12px;}
 thead th{
   position:sticky;top:0;background:var(--surface-3);color:var(--text-dim);
