@@ -24,7 +24,7 @@ function miniTxTable(rows, limit) {
       <td class="num" style="color:${r.esIngreso ? "var(--secondary)" : "var(--text)"}">${fmtCOP(r.importe)}</td>
     </tr>`).join("");
   const more = sorted.length > shown.length ? `<div class="text-faint" style="font-size:11px;margin-top:8px;">Mostrando ${shown.length} de ${sorted.length} transacciones (ordenadas por valor absoluto).</div>` : "";
-  return `<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Tercero</th><th>Empleado</th><th class="num">Importe</th></tr></thead><tbody>${rowsHtml || '<tr><td colspan="5" style="padding:14px;color:var(--text-faint);">Sin transacciones.</td></tr>'}</tbody></table></div>${more}`;
+  return `<div class="table-wrap table-wrap-scroll-modal"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Tercero</th><th>Empleado</th><th class="num">Importe</th></tr></thead><tbody>${rowsHtml || '<tr><td colspan="5" style="padding:14px;color:var(--text-faint);">Sin transacciones.</td></tr>'}</tbody></table></div>${more}`;
 }
 
 function openMonthDetailModal(periodo) {
@@ -41,14 +41,16 @@ function openMonthDetailModal(periodo) {
   openModal("Detalle de " + periodoToLabel(periodo), kpi.count + " transacciones en el mes (según filtros activos)", body);
 }
 
-function openCuentaBreakdownModal(item, kindLabel) {
-  const kpi = computeFinancieroKPIs(item.rows);
+function openCuentaBreakdownModal(item, kindLabel, backFn) {
   const porEmpleado = costoPorPersonal(item.rows).slice(0, 8);
   const empHtml = porEmpleado.length ? `
-    <div class="gerente-list mt-8">
+    <div class="section-title" style="font-size:12px;margin:14px 0 6px;">Personal / terceros involucrados</div>
+    <div class="gerente-list gerente-list-scroll">
       ${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}
     </div>` : "";
+  const backHtml = backFn ? `<button class="btn btn-ghost btn-sm" id="modal-back-btn" style="margin-bottom:12px;">‹ Volver</button>` : "";
   const body = `
+    ${backHtml}
     <div class="modal-kpis">
       <div class="modal-kpi"><div class="l">Total</div><div class="v">${fmtCOP(item.value)}</div></div>
       <div class="modal-kpi"><div class="l"># Transacciones</div><div class="v">${item.rows.length}</div></div>
@@ -57,17 +59,22 @@ function openCuentaBreakdownModal(item, kindLabel) {
     <div class="mt-8"></div>
     ${miniTxTable(item.rows, 80)}`;
   openModal(item.label, kindLabel, body);
+  if (backFn) document.getElementById("modal-back-btn").addEventListener("click", backFn);
 }
 
 function openCostoCategoriaModal(cat, rows, totalAmbasCategorias) {
   const total = sumBy(rows, r => r.importe);
   const porCuenta = costosPorCuentaMayor(rows);
-  const cuentasHtml = porCuenta.map(d => `
-    <div class="gerente-row"><span class="name">${escapeHtml(d.label)}</span><span class="pct">${fmtCOP(d.value)} · ${fmtPct(total ? d.value / total * 100 : 0, 0)}</span></div>`).join("");
+  const catLabel = cat === "directo" ? "Costos directos" : "Otros costos";
+  const cuentasHtml = porCuenta.map((d, i) => `
+    <div class="gerente-row clickable" data-idx="${i}" title="Clic para ver el detalle de esta cuenta">
+      <span class="name">${escapeHtml(d.label)}</span>
+      <span class="pct">${fmtCOP(d.value)} · ${fmtPct(total ? d.value / total * 100 : 0, 0)}</span>
+    </div>`).join("");
   const porEmpleado = costoPorPersonal(rows).slice(0, 8);
   const empHtml = porEmpleado.length ? `
     <div class="section-title" style="font-size:12px;margin:14px 0 6px;">Personal involucrado</div>
-    <div class="gerente-list">${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}</div>` : "";
+    <div class="gerente-list gerente-list-scroll">${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}</div>` : "";
 
   const body = `
     <div class="modal-kpis">
@@ -75,16 +82,19 @@ function openCostoCategoriaModal(cat, rows, totalAmbasCategorias) {
       <div class="modal-kpi"><div class="l">% del total de costos</div><div class="v">${fmtPct(totalAmbasCategorias ? total / totalAmbasCategorias * 100 : 0)}</div></div>
       <div class="modal-kpi"><div class="l"># Transacciones</div><div class="v">${rows.length}</div></div>
     </div>
-    <div class="section-title" style="font-size:12px;margin-bottom:6px;">Cuentas mayores incluidas</div>
-    <div class="gerente-list">${cuentasHtml || '<div class="text-faint" style="font-size:12px;">Sin cuentas para este filtro.</div>'}</div>
+    <div class="section-title" style="font-size:12px;margin-bottom:6px;">Cuentas mayores incluidas <span class="text-faint" style="font-weight:500;text-transform:none;">· clic en una para ver su detalle</span></div>
+    <div class="gerente-list gerente-list-scroll" id="modal-cuentas-list">${cuentasHtml || '<div class="text-faint" style="font-size:12px;">Sin cuentas para este filtro.</div>'}</div>
     ${empHtml}
     <div class="mt-8"></div>
     ${miniTxTable(rows, 80)}`;
-  openModal(
-    cat === "directo" ? "Costos directos" : "Otros costos",
-    "Clasificación oficial del IBReport (campo Eri_est) · según los filtros activos",
-    body
-  );
+  openModal(catLabel, "Clasificación oficial del IBReport (campo Eri_est) · según los filtros activos", body);
+
+  document.querySelectorAll("#modal-cuentas-list .gerente-row[data-idx]").forEach(elx => {
+    elx.addEventListener("click", () => {
+      const item = porCuenta[Number(elx.dataset.idx)];
+      openCuentaBreakdownModal(item, catLabel + " › " + item.label, () => openCostoCategoriaModal(cat, rows, totalAmbasCategorias));
+    });
+  });
 }
 
 function openMatrixCellModal(cuenta, periodo, matrix, periodos) {

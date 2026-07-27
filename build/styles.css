@@ -405,7 +405,12 @@ tbody tr.clickable{cursor:pointer;}
 }
 .modal-head h3{margin:0 0 3px;font-size:15px;font-weight:700;}
 .modal-head p{margin:0;font-size:11.5px;color:var(--text-faint);}
-.modal-body{padding:18px 20px;overflow:auto;}
+.modal-body{padding:18px 20px;overflow:auto;flex:1 1 auto;min-height:0;}
+.table-wrap-scroll-modal{max-height:280px;overflow-y:auto;}
+.gerente-list-scroll{max-height:200px;overflow-y:auto;padding-right:4px;}
+.gerente-row.clickable{cursor:pointer;border-radius:8px;padding:6px 8px;margin:0 -8px;transition:background .12s;}
+.gerente-row.clickable:hover{background:var(--surface-3);}
+.gerente-row.clickable:hover .name{color:var(--text);}
 .modal-close{
   width:30px;height:30px;border-radius:9px;border:1px solid var(--border);background:var(--surface-2);
   color:var(--text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;flex:0 0 auto;
