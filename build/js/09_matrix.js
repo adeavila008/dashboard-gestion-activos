@@ -11,6 +11,12 @@ function buildCostMatrix(rows) {
   cuentas.forEach(c => { matrix[c] = {}; periodos.forEach(p => matrix[c][p] = 0); });
   costRows.forEach(r => { matrix[r.cuentaMayor][r.periodo] = (matrix[r.cuentaMayor][r.periodo] || 0) + r.importe; });
 
+  // Solo se resaltan AUMENTOS inusuales de costo (posible sobrecosto a
+  // revisar). Una caida fuerte en un costo es una buena noticia, no una
+  // anomalia que revisar, asi que ya no se marca en rojo (antes se
+  // resaltaban por igual subidas y bajadas, usando el valor absoluto del
+  // cambio, lo cual hacia ver como "problema" algo que en realidad era una
+  // mejora).
   const anomalies = new Set();
   const anomalyList = [];
   cuentas.forEach(c => {
@@ -21,8 +27,8 @@ function buildCostMatrix(rows) {
       const prev = vals[i - 1], curr = vals[i];
       if (curr === 0) continue;
       const pctChange = prev !== 0 ? (curr - prev) / Math.abs(prev) : Infinity;
-      const zFlag = sd > 0 && Math.abs(curr - m) > CFG.anomalyZ * sd;
-      const pctFlag = Math.abs(pctChange) >= CFG.anomalyMinPct && Math.abs(curr) > 250000;
+      const zFlag = sd > 0 && (curr - m) > CFG.anomalyZ * sd;       // muy por ENCIMA del promedio
+      const pctFlag = pctChange >= CFG.anomalyMinPct && Math.abs(curr) > 250000; // solo aumentos vs. mes anterior
       if ((zFlag || pctFlag) && Math.abs(curr) > 250000) {
         const key = c + "|" + periodos[i];
         anomalies.add(key);
@@ -30,7 +36,7 @@ function buildCostMatrix(rows) {
       }
     }
   });
-  anomalyList.sort((a, b) => Math.abs(b.value - (isFinite(b.pctChange) ? 0 : 0)) - 0 || b.periodo - a.periodo);
+  anomalyList.sort((a, b) => Math.abs(b.value) - Math.abs(a.value) || b.periodo - a.periodo);
 
   return { cuentas, periodos, matrix, anomalies, anomalyList };
 }

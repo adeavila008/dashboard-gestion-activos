@@ -143,7 +143,7 @@ async function generateExecutiveReport(anios, proyectos) {
 
     // ---- Anomalías / saltos de costo
     doc.setFont("helvetica", "bold"); doc.setFontSize(12);
-    doc.text("Anomalías de costo detectadas automáticamente", margin, y); y += 8;
+    doc.text("Aumentos inusuales de costo detectados automáticamente", margin, y); y += 8;
     if (anomalyList.length) {
       doc.autoTable({
         startY: y, margin: { left: margin, right: margin },
