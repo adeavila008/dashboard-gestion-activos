@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de Gestión — Dirección de Gestión de Activos | ISES</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+<style>
+{{STYLES}}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- ================= SIDEBAR ================= -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">GA</div>
+      <div class="brand-text">
+        <b>Gestión de Activos</b>
+        <span>ISES · Panel de gestión</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">Navegación</div>
+      <div class="nav-item active" data-view="inicio">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg>
+        <span class="lbl">Inicio</span>
+      </div>
+      <div class="nav-item" data-view="financiero">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12.5" y="8" width="3" height="10"/><rect x="18" y="5" width="3" height="13"/></svg>
+        <span class="lbl">Financiero</span>
+      </div>
+      <div class="nav-item" data-view="salud">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 8-6-16-3 8H2"/></svg>
+        <span class="lbl">Salud de Proyectos</span>
+      </div>
+      <div class="sidebar-section-label">Datos</div>
+      <div class="nav-item" id="nav-upload-fin">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
+        <span class="lbl">Cargar Excel mensual</span>
+      </div>
+      <div class="nav-item" id="nav-upload-baseline">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
+        <span class="lbl">Cargar Excel indicadores</span>
+      </div>
+    </nav>
+    <div class="sidebar-foot">
+      <button class="collapse-btn" id="btn-collapse">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/><path d="M9 18l-6-6 6-6" opacity="0"/></svg>
+        <span class="lbl">Contraer menú</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-title">
+        <h1 id="topbar-title">Inicio</h1>
+        <span class="sub" id="topbar-sub">Dirección de Gestión de Activos</span>
+      </div>
+      <span class="badge-dir" id="badge-period">— sin datos —</span>
+      <div class="topbar-actions">
+        <button class="btn btn-outline" id="btn-report">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          Informe ejecutivo PDF
+        </button>
+      </div>
+    </header>
+
+    <!-- ============ VIEW: INICIO ============ -->
+    <section class="view active" id="view-inicio">
+      <div class="hero">
+        <div>
+          <h2>Panel de gestión — Dirección de Gestión de Activos</h2>
+          <p>Consolida la ejecución financiera (ingresos, costos y márgenes) y la salud de los proyectos (CPI/SPI y Curva S) de la dirección, a partir del export contable IBReport y del consolidado de líneas base. Todo el procesamiento ocurre en tu navegador.</p>
+        </div>
+        <div class="tag-row" id="hero-tags"></div>
+      </div>
+
+      <div class="mini-stats" id="home-stats"></div>
+
+      <div>
+        <div class="section-title" style="margin-bottom:12px;">Escoge un módulo</div>
+        <div class="module-grid">
+          <div class="module-card" data-goto="financiero" style="--accent:var(--primary);--accent-soft:var(--primary-soft);">
+            <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12.5" y="8" width="3" height="10"/><rect x="18" y="5" width="3" height="13"/></svg></div>
+            <h3>Financiero</h3>
+            <p>Ingresos, costos, margen, tendencia mensual, matriz de costos con anomalías, costo por personal e informe ejecutivo en PDF.</p>
+          </div>
+          <div class="module-card" data-goto="salud" style="--accent:var(--secondary);--accent-soft:var(--secondary-soft);">
+            <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 8-6-16-3 8H2"/></svg></div>
+            <h3>Salud de Proyectos</h3>
+            <p>CPI, SPI, Curva S de avance y costo acumulado, y tablero semáforo por proyecto a partir de las líneas base.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ VIEW: FINANCIERO ============ -->
+    <section class="view" id="view-financiero">
+
+      <div class="filters-bar" id="fin-filters">
+        <span class="fb-label">Filtros</span>
+        <div class="chip-select"><select id="f-proyecto"><option value="">Proyecto: todos</option></select></div>
+        <div class="chip-select"><select id="f-anio"><option value="">Año: todos</option></select></div>
+        <div class="chip-select"><select id="f-mes"><option value="">Mes: todos</option></select></div>
+        <div class="chip-select"><select id="f-tipo"><option value="">Tipo: todos</option></select></div>
+        <div class="chip-select"><select id="f-empleado"><option value="">Empleado: todos</option></select></div>
+        <div class="chip-select"><select id="f-cuenta"><option value="">Cuenta mayor: todas</option></select></div>
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" id="f-search" placeholder="Buscar descripción / tercero…">
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btn-clear-filters">Limpiar filtros</button>
+      </div>
+
+      <div class="kpi-grid" id="fin-kpis"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">Tendencia mensual — Ingresos vs. Costos</div><div class="card-hint">clic en una barra o punto para ver el detalle del mes</div></div>
+            <div class="card-tools"><button class="icon-btn" data-expand="chart-trend" title="Ampliar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">Costos por cuenta mayor</div><div class="card-hint">clic en una porción para ver el desglose</div></div>
+            <div class="card-tools"><button class="icon-btn" data-expand="chart-cuentamayor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-cuentamayor"></canvas></div>
+          <div class="legend-row" id="legend-cuentamayor"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">Margen mensual (%) y margen acumulado</div><div class="card-hint">meta ≥ 30% · clic en un punto para ver el detalle</div></div>
+            <div class="card-tools"><button class="icon-btn" data-expand="chart-margen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-margen"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">Costo por personal</div><div class="card-hint">clic en una barra para filtrar por empleado</div></div>
+            <div class="card-tools"><button class="icon-btn" data-expand="chart-personal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-personal"></canvas></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">Detalle de ingresos por concepto</div><div class="card-hint">clic en una barra para ver las transacciones</div></div>
+            <div class="card-tools"><button class="icon-btn" data-expand="chart-ingresos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-ingresos"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">Top cuentas de costo (detalle)</div><div class="card-hint">clic en una barra para ver las transacciones</div></div>
+            <div class="card-tools"><button class="icon-btn" data-expand="chart-topcuentas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-topcuentas"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">👤 Análisis de personal</div><div class="card-hint">costo por empleado según los filtros activos, y % que representa sobre su total en toda la dirección</div></div>
+        </div>
+        <div class="table-wrap"><table id="tbl-personal"><thead><tr><th>Empleado</th><th class="num">Costo (filtro actual)</th><th class="num">Costo total en la dirección</th><th class="num">% del total</th><th># Transacciones</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">Matriz mensual de costos por cuenta mayor</div><div class="card-hint">clic en un valor para ver el detalle (personal, transacciones, variación vs. mes anterior) · anomalías resaltadas en rojo</div></div>
+          <div class="card-tools"><button class="icon-btn" data-expand="matrix-costos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+        </div>
+        <div class="table-wrap"><table class="matrix-table" id="tbl-matrix"><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">Gestión de proyectos</div><div class="card-hint">proyectos con movimiento contable en la dirección</div></div>
+          <div class="card-tools">
+            <button class="chip active" id="btn-proj-activos">Solo activos</button>
+            <button class="chip" id="btn-proj-todos">Todos</button>
+          </div>
+        </div>
+        <div class="proj-grid" id="proj-grid"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">Detalle de transacciones</div><div class="card-hint" id="tx-count-hint"></div></div>
+        </div>
+        <div class="table-wrap"><table id="tbl-transacciones">
+          <thead><tr><th>Fecha</th><th>Proyecto</th><th>Tipo</th><th>Cuenta mayor</th><th>Cuenta</th><th>Descripción</th><th>Tercero</th><th>Empleado</th><th class="num">Importe</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <div class="pager">
+          <span class="info" id="tx-pager-info"></span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm btn-outline" id="tx-prev">‹ Anterior</button>
+            <button class="btn btn-sm btn-outline" id="tx-next">Siguiente ›</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ VIEW: SALUD DE PROYECTOS ============ -->
+    <section class="view" id="view-salud">
+
+      <div class="card" id="salud-upload-card">
+        <div class="card-head">
+          <div><div class="card-title">⭱ Cargar Excel de indicadores</div><div class="card-hint">Sube el consolidado de líneas base (hoja "Consolidado"/"DATA", mismo formato del archivo Indicadores GA). Se procesa en tu navegador y reemplaza los datos de este módulo.</div></div>
+        </div>
+        <div class="dropzone" id="dropzone-baseline">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
+          <b>Arrastra el Excel aquí o haz clic para elegirlo</b>
+          <span id="baseline-file-status">Usando datos de ejemplo cargados por defecto</span>
+        </div>
+      </div>
+
+      <div class="filters-bar">
+        <span class="fb-label">Filtros</span>
+        <div class="chip-select"><select id="s-proyecto"><option value="">Proyecto: todos</option></select></div>
+        <div class="chip-select"><select id="s-anio"><option value="">Año: todos</option></select></div>
+        <div class="chip-select"><select id="s-mes"><option value="">Mes de corte: todos</option></select></div>
+        <button class="btn btn-ghost btn-sm" id="btn-clear-filters-salud">Limpiar filtros</button>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">Resumen de salud por proyecto</div><div class="card-hint">estilo semáforo · clic en una fila para ver el detalle del proyecto</div></div>
+        </div>
+        <div class="table-wrap"><table id="tbl-semaforo">
+          <thead><tr><th>Proyecto</th><th>Gerente</th><th>Mes de corte</th><th class="num">Avance real</th><th class="num">Avance planeado</th><th class="num">CPI</th><th class="num">SPI</th><th>Estado</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">Curva S — Avance de proyecto (%)</div><div class="card-hint">planificado vs. real · clic en un punto para ver el detalle del mes</div></div>
+            <div class="card-tools"><button class="icon-btn" data-expand="chart-curvas-avance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-curvas-avance"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">Curva S — Costo acumulado</div><div class="card-hint">planeado vs. real</div></div>
+            <div class="card-tools"><button class="icon-btn" data-expand="chart-curvas-costo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-curvas-costo"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">Evolución CPI / SPI</div><div class="card-hint">meta ≥ 1.0</div></div>
+          <div class="card-tools"><button class="icon-btn" data-expand="chart-cpi-spi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+        </div>
+        <div class="chart-wrap"><canvas id="chart-cpi-spi"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">📝 Seguimiento del último mes reportado</div><div class="card-hint" id="seguimiento-proyecto-label"></div></div>
+        </div>
+        <div id="seguimiento-body"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ================= MODAL ================= -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h3 id="modal-title">Detalle</h3>
+        <p id="modal-sub"></p>
+      </div>
+      <button class="modal-close" id="modal-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ================= UPLOAD INPUTS (hidden) ================= -->
+<input type="file" id="file-ibreport" accept=".xlsx,.xls">
+<input type="file" id="file-baseline" accept=".xlsx,.xls">
+
+<div class="toast-stack" id="toast-stack"></div>
+<div class="loading-overlay" id="loading-overlay"><div class="spinner"></div><p id="loading-text">Procesando…</p></div>
+
+<script>
+window.__DEFAULT_IBREPORT__ = {{DATA_IBREPORT}};
+window.__DEFAULT_BASELINE__ = {{DATA_BASELINE}};
+window.__PROJECTS_REGISTRY__ = {{DATA_PROJECTS}};
+window.__BUILD_INFO__ = { builtAt: "{{BUILD_DATE}}" };
+</script>
+<script>
+{{SCRIPT}}
+</script>
+</body>
+</html>
