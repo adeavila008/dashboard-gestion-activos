@@ -198,6 +198,52 @@ function renderWipSemanalChart(row) {
   });
 }
 
+/** Valores MENSUALES (sin acumular): WIP del mes sin ajuste, WIP del mes ya
+ * con +/- ajustes, y facturación real del mes — para ver, mes a mes, qué tan
+ * grande fue el ajuste y cómo se compara la facturación real contra lo que
+ * entró de WIP ese mes. */
+function renderWipMensualChart(row) {
+  const canvas = document.getElementById("chart-wip-mensual");
+  if (!canvas) return;
+  const hist = row ? row.historico : [];
+  const labels = hist.map(h => mesToPeriodoLabel(h.mes));
+
+  upsertChart("chart-wip-mensual", {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "WIP mes (sin ajuste)", data: hist.map(h => h.wipMes), backgroundColor: colorWithAlpha(PALETTE.violet, .55),
+          borderRadius: 5, maxBarThickness: 20, order: 2, datalabels: dlCompactCurrency(PALETTE.violet, { align: "end", anchor: "end" }),
+        },
+        {
+          label: "WIP mes +/- ajustes", data: hist.map(h => h.wipMesAjustes), backgroundColor: colorWithAlpha(PALETTE.violet, .95),
+          borderRadius: 5, maxBarThickness: 20, order: 2, datalabels: dlCompactCurrency(PALETTE.primary2 || PALETTE.violet, { align: "end", anchor: "end" }),
+        },
+        {
+          label: "Facturación real mes", data: hist.map(h => h.facturacionRealMes), type: "line", borderColor: PALETTE.secondary,
+          backgroundColor: "transparent", tension: .25, pointRadius: 3, order: 1,
+          datalabels: dlCompactCurrency(PALETTE.secondary, { align: "top", offset: 8 }),
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 22 } },
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        y: { ticks: { callback: v => fmtCompact(v) }, grid: { color: "rgba(255,255,255,.05)" } },
+        x: { grid: { display: false } },
+      },
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmtCOP(ctx.parsed.y)}` } },
+      },
+    },
+  });
+}
+
 function renderWipHistoricoTable(row) {
   const tbody = document.querySelector("#tbl-wip-historico tbody");
   if (!tbody) return;
@@ -246,6 +292,7 @@ function renderWipDetalle(rows) {
   document.getElementById("wip-detalle-title").textContent = row ? row.nombre + " (" + row.codigo + ")" + (!STATE.wipFilters.proyecto ? " · mostrando el primero de la lista, filtra por proyecto para ver otro" : "") : "Sin proyectos para mostrar";
   renderWipEvolucionChart(row);
   renderWipSemanalChart(row);
+  renderWipMensualChart(row);
   renderWipHistoricoTable(row);
 }
 
