@@ -4,23 +4,40 @@ Excel fuente, y los deja listos como JSON compacto para embeber en el
 dashboard como dataset por defecto (el usuario puede reemplazarlo cargando un
 Excel nuevo desde el navegador).
 
-El IBReport financiero se arma combinando DOS fuentes:
-  1. build/source/historical/*.xlsx -> exports "cerrados" de años anteriores
-     (2024, 2025, ...). Estos NO cambian nunca, se suben una sola vez y se
-     quedan ahi permanentemente (la carpeta esta excluida de git via
-     .gitignore, pero persiste en la carpeta local del proyecto).
-  2. El archivo "actual" (2026 en adelante), que se sigue actualizando mes a
-     mes hasta que termine el año -> ese se pasa como primer argumento (o se
-     busca por defecto en build/source/).
-Cuando un año se cierra, basta con mover/copiar su ultimo Excel a
-build/source/historical/ para que quede fijo como historico, y el primer
-argumento pasa a ser el Excel del año nuevo.
+El IBReport financiero se arma escaneando TODOS los .xlsx de una carpeta
+(tipicamente "ISES/Costos" en el OneDrive del usuario, donde van quedando
+tanto los exports ya cerrados de años anteriores como el del año en curso,
+que se reemplaza/actualiza mes a mes). No hace falta distinguir "historico"
+de "actual": cada fila se identifica por numero de asiento + secuencia +
+cuenta + periodo + proyecto + importe, y se deduplica automaticamente, asi
+que no importa si un archivo nuevo vuelve a traer meses que ya estaban en
+otro archivo procesado antes.
 
 Uso:
-    python3 extract_data.py <ruta_ibreport_actual.xlsx> <ruta_indicadores_ga.xlsx>
+    python3 extract_data.py --ibreport-dir "<carpeta con los .xlsx de Costos>" <ruta_indicadores_ga.xlsx>
+    python3 extract_data.py <ruta_ibreport.xlsx> <ruta_indicadores_ga.xlsx>          (un solo archivo)
+    python3 extract_data.py --ibreport-dir "<carpeta con los .xlsx de Costos>" --ibreport-only
+        (solo actualiza el IBReport financiero; no toca default_baseline.json ni
+        projects_registry.json — para la automatizacion semanal, que solo tiene
+        acceso a la carpeta Costos, no al Excel "Indicadores GA" de Salud de
+        Proyectos)
+
+Modos "por partes" (para entornos con limite de tiempo por comando, ej. la
+tarea programada semanal, donde procesar 5 Excel grandes de un tirón no
+alcanza a caber en una sola llamada):
+    python3 extract_data.py --cache-file "<un_excel.xlsx>" "<carpeta_cache>"
+        Procesa UN solo Excel y guarda sus filas GA ya extraidas como JSON en
+        <carpeta_cache>/<nombre_archivo>.json (rapido, pensado para correr un
+        archivo por llamada).
+    python3 extract_data.py --merge-cache "<carpeta_cache>"
+        Junta todos los .json de <carpeta_cache> (uno por Excel, generados con
+        --cache-file), deduplica y escribe data/default_ibreport.json. No toca
+        baseline/projects_registry (equivalente a --ibreport-only).
 
 Si no se pasan argumentos, busca los archivos por nombre dentro de
-build/source/ (carpeta local, no versionada en git por defecto).
+build/source/ (carpeta local, no versionada en git por defecto). Tambien se
+soporta build/source/historical/*.xlsx (modo antiguo) si no se usa
+--ibreport-dir.
 """
 import json
 import math
@@ -37,8 +54,28 @@ OUT = os.path.join(BUILD_DIR, "data")
 DEFAULT_IBREPORT_NAME = "Consultoría - Inf. de ingresos, gastos y costos_Default (15).xlsx"
 DEFAULT_BASELINE_NAME = "Indicadores GA _.xlsx"
 
-IBREPORT_PATH = sys.argv[1] if len(sys.argv) > 1 else os.path.join(SOURCE_DIR, DEFAULT_IBREPORT_NAME)
-BASELINE_PATH = sys.argv[2] if len(sys.argv) > 2 else os.path.join(SOURCE_DIR, DEFAULT_BASELINE_NAME)
+_argv = sys.argv[1:]
+
+CACHE_FILE_XLSX = None
+CACHE_DIR = None
+MERGE_CACHE_DIR = None
+if len(_argv) >= 3 and _argv[0] == "--cache-file":
+    CACHE_FILE_XLSX = _argv[1]
+    CACHE_DIR = _argv[2]
+elif len(_argv) >= 2 and _argv[0] == "--merge-cache":
+    MERGE_CACHE_DIR = _argv[1]
+
+IBREPORT_DIR = None
+if len(_argv) >= 2 and _argv[0] == "--ibreport-dir":
+    IBREPORT_DIR = _argv[1]
+    _argv = _argv[2:]
+
+IBREPORT_ONLY = "--ibreport-only" in _argv
+if IBREPORT_ONLY:
+    _argv = [a for a in _argv if a != "--ibreport-only"]
+
+IBREPORT_PATH = _argv[0] if len(_argv) > 0 else os.path.join(SOURCE_DIR, DEFAULT_IBREPORT_NAME)
+BASELINE_PATH = _argv[1] if len(_argv) > 1 else os.path.join(SOURCE_DIR, DEFAULT_BASELINE_NAME)
 
 DIRECCION = "DIRECCION DE GESTIÓN DE ACTIVOS"
 
@@ -131,23 +168,92 @@ def _extract_ibreport_rows(path):
     return out
 
 
+def _dedup_key_indices():
+    idx_key = {name: i for i, name in enumerate(IB_KEY_MAP.values())}
+    return idx_key["numAsiento"], idx_key["secuencia"], idx_key["cuentaMayorCod"], idx_key["periodo"], idx_key["proyectoCod"], idx_key["importe"]
+
+
+def _dedup_rows(rows_by_source):
+    """rows_by_source: lista de (nombre_legible, lista_de_filas). Deduplica
+    entre todas las fuentes usando la misma clave que extract_ibreport()."""
+    i_numAsiento, i_secuencia, i_cuentaMayorCod, i_periodo, i_proyectoCod, i_importe = _dedup_key_indices()
+    seen = set()
+    all_rows = []
+    for name, rows in rows_by_source:
+        added = 0
+        for rec in rows:
+            key = (rec[i_numAsiento], rec[i_secuencia], rec[i_cuentaMayorCod], rec[i_periodo], rec[i_proyectoCod], rec[i_importe])
+            if key in seen:
+                continue
+            seen.add(key)
+            all_rows.append(rec)
+            added += 1
+        print(f"  {name}: {len(rows)} filas GA ({added} nuevas tras deduplicar)")
+    return all_rows
+
+
+def cache_one_file():
+    """--cache-file <xlsx> <cache_dir>: procesa UN Excel y guarda sus filas GA
+    ya extraidas (formato IB_COLS) como JSON en <cache_dir>. Pensado para
+    correr un archivo por llamada cuando hay limite de tiempo por comando."""
+    if not os.path.exists(CACHE_FILE_XLSX):
+        raise FileNotFoundError(f"No existe el archivo '{CACHE_FILE_XLSX}'.")
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    rows = _extract_ibreport_rows(CACHE_FILE_XLSX)
+    base = os.path.splitext(os.path.basename(CACHE_FILE_XLSX))[0]
+    out_path = os.path.join(CACHE_DIR, base + ".json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(rows, f, ensure_ascii=False, separators=(",", ":"))
+    print(f"Cache guardado: {out_path} ({len(rows)} filas GA)")
+
+
+def merge_cache():
+    """--merge-cache <cache_dir>: junta todos los .json generados con
+    --cache-file, deduplica y escribe data/default_ibreport.json. Nunca toca
+    baseline/projects_registry."""
+    if not os.path.isdir(MERGE_CACHE_DIR):
+        raise FileNotFoundError(f"No existe la carpeta de cache '{MERGE_CACHE_DIR}'.")
+    files = sorted(fn for fn in os.listdir(MERGE_CACHE_DIR) if fn.lower().endswith(".json"))
+    if not files:
+        raise FileNotFoundError(f"No hay archivos .json en '{MERGE_CACHE_DIR}' (corre --cache-file primero para cada Excel).")
+    rows_by_source = []
+    for fn in files:
+        with open(os.path.join(MERGE_CACHE_DIR, fn), encoding="utf-8") as f:
+            rows_by_source.append((fn, json.load(f)))
+    all_rows = _dedup_rows(rows_by_source)
+    payload = {"cols": IB_COLS, "rows": all_rows}
+    with open(f"{OUT}/default_ibreport.json", "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+    print("IBReport GA rows (total combinado desde cache):", len(all_rows))
+    return all_rows, IB_COLS
+
+
 def extract_ibreport():
-    # 1) historicos fijos (build/source/historical/*.xlsx), en orden alfabetico
-    #    (los nombres traen el rango de periodo, ej. "202401 - 202406", asi
-    #    que ordenan cronologicamente solos).
     paths = []
-    if os.path.isdir(HISTORICAL_DIR):
-        for fn in sorted(os.listdir(HISTORICAL_DIR)):
-            if fn.lower().endswith((".xlsx", ".xls")):
-                paths.append(os.path.join(HISTORICAL_DIR, fn))
-    # 2) el Excel "actual" (año en curso), al final
-    if os.path.exists(IBREPORT_PATH):
-        paths.append(IBREPORT_PATH)
+    if IBREPORT_DIR:
+        # Modo carpeta: procesa TODOS los .xlsx de la carpeta indicada (ej. la
+        # carpeta "Costos" del usuario), sin distinguir historico/actual.
+        if not os.path.isdir(IBREPORT_DIR):
+            raise FileNotFoundError(f"No existe la carpeta --ibreport-dir '{IBREPORT_DIR}'.")
+        for fn in sorted(os.listdir(IBREPORT_DIR)):
+            if fn.lower().endswith((".xlsx", ".xls")) and not fn.startswith("~$"):
+                paths.append(os.path.join(IBREPORT_DIR, fn))
     else:
-        print(f"AVISO: no se encontro el IBReport actual en '{IBREPORT_PATH}'.")
+        # Modo antiguo: historicos fijos (build/source/historical/*.xlsx), en
+        # orden alfabetico (los nombres traen el rango de periodo, ej.
+        # "202401 - 202406", asi que ordenan cronologicamente solos) + el
+        # Excel "actual" pasado como primer argumento.
+        if os.path.isdir(HISTORICAL_DIR):
+            for fn in sorted(os.listdir(HISTORICAL_DIR)):
+                if fn.lower().endswith((".xlsx", ".xls")):
+                    paths.append(os.path.join(HISTORICAL_DIR, fn))
+        if os.path.exists(IBREPORT_PATH):
+            paths.append(IBREPORT_PATH)
+        else:
+            print(f"AVISO: no se encontro el IBReport actual en '{IBREPORT_PATH}'.")
 
     if not paths:
-        raise FileNotFoundError("No se encontro ningun IBReport (ni historico ni actual) para procesar.")
+        raise FileNotFoundError("No se encontro ningun IBReport para procesar.")
 
     idx_key = {name: i for i, name in enumerate(IB_KEY_MAP.values())}
     i_numAsiento, i_secuencia = idx_key["numAsiento"], idx_key["secuencia"]
@@ -271,6 +377,14 @@ def build_projects_registry(baseline_rows):
 
 
 if __name__ == "__main__":
-    extract_ibreport()
-    baseline = extract_baseline()
-    build_projects_registry(baseline)
+    if CACHE_FILE_XLSX is not None:
+        cache_one_file()
+    elif MERGE_CACHE_DIR is not None:
+        merge_cache()
+    else:
+        extract_ibreport()
+        if not IBREPORT_ONLY:
+            baseline = extract_baseline()
+            build_projects_registry(baseline)
+        else:
+            print("Modo --ibreport-only: no se tocan default_baseline.json ni projects_registry.json.")
