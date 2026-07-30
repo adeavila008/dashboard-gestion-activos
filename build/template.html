@@ -40,6 +40,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 8-6-16-3 8H2"/></svg>
         <span class="lbl">Salud de Proyectos</span>
       </div>
+      <div class="nav-item" data-view="wip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8"/><path d="M8 16h5"/><path d="M8 8h8"/></svg>
+        <span class="lbl">WIP y Facturación</span>
+      </div>
       <div class="sidebar-section-label">Datos</div>
       <div class="nav-item" id="nav-upload-fin">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
@@ -98,6 +102,11 @@
             <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 8-6-16-3 8H2"/></svg></div>
             <h3>Salud de Proyectos</h3>
             <p>CPI, SPI, Curva S de avance y costo acumulado, y tablero semáforo por proyecto a partir de las líneas base.</p>
+          </div>
+          <div class="module-card" data-goto="wip" style="--accent:var(--violet);--accent-soft:rgba(139,143,245,.14);">
+            <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8"/><path d="M8 16h5"/><path d="M8 8h8"/></svg></div>
+            <h3>WIP y Facturación</h3>
+            <p>Provisión de ingresos (WIP), saldo pendiente por facturar y proyección de facturación real vs. planeada, por proyecto.</p>
           </div>
         </div>
       </div>
@@ -291,6 +300,61 @@
         <div id="seguimiento-body"></div>
       </div>
     </section>
+
+    <!-- ============ VIEW: WIP Y FACTURACION ============ -->
+    <section class="view" id="view-wip">
+
+      <div class="filters-bar">
+        <span class="fb-label">Filtros</span>
+        <div class="chip-select"><select id="f-wip-proyecto"><option value="">Proyecto: selecciona uno</option></select></div>
+        <span class="text-faint" style="font-size:11.5px;margin-left:auto;" id="badge-wip-source">— sin datos —</span>
+      </div>
+
+      <div class="kpi-grid" id="wip-kpis"></div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">Comparativo por proyecto</div><div class="card-hint">último corte disponible de cada proyecto · clic en una fila para ver su detalle abajo</div></div>
+        </div>
+        <div class="table-wrap table-wrap-scroll"><table id="tbl-wip-comparativo">
+          <thead><tr><th>Proyecto</th><th class="num">Corte</th><th class="num">Saldo WIP</th><th class="num">WIP del mes</th><th class="num">Facturación real mes</th><th class="num">Facturación real acum.</th><th class="num">Pendiente por facturar</th><th class="num">Proyección próx. mes</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">Detalle del proyecto</div><div class="card-hint" id="wip-detalle-title">Selecciona un proyecto</div></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">WIP, facturación real y proyección</div><div class="card-hint">saldo WIP mensual vs. facturación real acumulada vs. proyección de facturación acumulada (GP-F08)</div></div>
+            <div class="card-tools"><button class="icon-btn" data-expand="chart-wip-evolucion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-wip-evolucion"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">Detalle semanal</div><div class="card-hint"></div></div>
+            <div class="card-tools"><button class="icon-btn" data-expand="chart-wip-semanal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-wip-semanal"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">Histórico mensual — Balance WIP</div><div class="card-hint">clic en un mes con detalle semanal (⌄) para ver la evolución por semana</div></div>
+        </div>
+        <div class="table-wrap table-wrap-scroll"><table id="tbl-wip-historico">
+          <thead><tr><th>Mes</th><th class="num">Saldo WIP</th><th class="num">WIP del mes</th><th class="num">Facturación real mes</th><th class="num">Facturación real acum.</th><th class="num">Pendiente por facturar</th><th>Observaciones</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
   </div>
 </div>
 
@@ -319,6 +383,8 @@
 window.__DEFAULT_IBREPORT__ = {{DATA_IBREPORT}};
 window.__DEFAULT_BASELINE__ = {{DATA_BASELINE}};
 window.__PROJECTS_REGISTRY__ = {{DATA_PROJECTS}};
+window.__DEFAULT_WIP__ = {{DATA_WIP}};
+window.__DEFAULT_FACTURACION__ = {{DATA_FACTURACION}};
 window.__BUILD_INFO__ = { builtAt: "{{BUILD_DATE}}" };
 </script>
 <script>

@@ -6,6 +6,7 @@ const VIEW_META = {
   inicio: { title: "Inicio", sub: CFG.direccionLabel },
   financiero: { title: "Financiero", sub: "Análisis de costos e ingresos — " + CFG.direccionLabel },
   salud: { title: "Salud de Proyectos", sub: "CPI, SPI y Curva S — " + CFG.direccionLabel },
+  wip: { title: "WIP y Facturación", sub: "Provisión de ingresos y proyección de facturación — " + CFG.direccionLabel },
 };
 
 function switchView(view) {
@@ -17,6 +18,7 @@ function switchView(view) {
   document.getElementById("topbar-sub").textContent = VIEW_META[view].sub;
   if (view === "financiero") renderFinanciero();
   if (view === "salud") renderSalud();
+  if (view === "wip") renderWip();
   if (view === "inicio") renderHomeStats();
 }
 

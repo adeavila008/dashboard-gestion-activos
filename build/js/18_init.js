@@ -5,6 +5,8 @@
 function initApp() {
   STATE.ib.rows = loadDefaultIBReport();
   STATE.baseline.rows = loadDefaultBaseline();
+  STATE.wip = loadDefaultWip();
+  STATE.facturacion = loadDefaultFacturacion();
 
   wireNav();
   wireModal();
@@ -13,6 +15,7 @@ function initApp() {
   wireTransactionsPager();
   wireProjectToggle();
   wireSaludFilters();
+  wireWipFilters();
 
   populateFinancieroFilterOptions();
   populateSaludFilterOptions();
