@@ -280,6 +280,7 @@ input[type=file]{display:none;}
 .icon-btn svg{width:14px;height:14px;}
 .chart-wrap{position:relative;flex:1;min-height:230px;}
 .chart-wrap canvas{cursor:pointer;}
+.chart-wrap-tall{min-height:360px;}
 .legend-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);}
 .legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);}
 .legend-dot{width:8px;height:8px;border-radius:2px;flex:0 0 auto;}

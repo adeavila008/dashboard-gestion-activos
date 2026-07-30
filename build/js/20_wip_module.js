@@ -136,23 +136,23 @@ function renderWipEvolucionChart(row) {
         {
           label: "Saldo WIP", data: hist.map(h => h.saldoWip), borderColor: PALETTE.violet,
           backgroundColor: colorWithAlpha(PALETTE.violet, .12), fill: true, tension: .25, pointRadius: 2,
-          datalabels: dlCompactCurrency(PALETTE.violet, { align: "bottom", offset: 6 }),
+          datalabels: dlLastPoint(PALETTE.violet, { align: "bottom", offset: 6 }),
         },
         {
           label: "Facturación real acumulada", data: hist.map(h => h.facturacionRealAcum), borderColor: PALETTE.secondary,
           backgroundColor: "transparent", tension: .25, pointRadius: 2,
-          datalabels: dlCompactCurrency(PALETTE.secondary, { align: "top", offset: 6 }),
+          datalabels: dlLastPoint(PALETTE.secondary, { align: "bottom", offset: 6 }),
         },
         {
           label: "Proyección facturación acumulada", data: hist.map(h => proyByKey.get(mesKey(h.mes)) ?? null), borderColor: PALETTE.primary,
           borderDash: [5, 4], backgroundColor: "transparent", tension: .25, pointRadius: 2,
-          datalabels: dlCompactCurrency(PALETTE.primary, { align: "top", offset: 18 }),
+          datalabels: dlLastPoint(PALETTE.primary, { align: "top", offset: 6 }),
         },
       ],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      layout: { padding: { top: 22, bottom: 10 } },
+      layout: { padding: { top: 24, right: 46, bottom: 10 } },
       interaction: { mode: "index", intersect: false },
       scales: {
         y: { ticks: { callback: v => fmtCompact(v) }, grid: { color: "rgba(255,255,255,.05)" } },
@@ -220,28 +220,29 @@ function renderWipMensualChart(row) {
   const labels = hist.map(h => mesToPeriodoLabel(h.mes));
 
   upsertChart("chart-wip-mensual", {
-    type: "bar",
+    type: "line",
     data: {
       labels,
       datasets: [
         {
-          label: "WIP mes (sin ajuste)", data: hist.map(h => h.wipMes), backgroundColor: colorWithAlpha(PALETTE.violet, .55),
-          borderRadius: 5, maxBarThickness: 20, order: 2, datalabels: dlCompactCurrency(PALETTE.violet, { align: "end", anchor: "end" }),
+          label: "Facturación real mes", data: hist.map(h => h.facturacionRealMes), borderColor: PALETTE.secondary,
+          backgroundColor: colorWithAlpha(PALETTE.secondary, .1), fill: true, tension: .3, pointRadius: 3, borderWidth: 2.5, order: 1,
+          datalabels: dlCompactCurrency(PALETTE.secondary, { align: "top", offset: 6 }),
         },
         {
-          label: "WIP mes +/- ajustes", data: hist.map(h => h.wipMesAjustes), backgroundColor: colorWithAlpha(PALETTE.violet, .95),
-          borderRadius: 5, maxBarThickness: 20, order: 2, datalabels: dlCompactCurrency(PALETTE.primary2 || PALETTE.violet, { align: "end", anchor: "end" }),
+          label: "WIP mes +/- ajustes", data: hist.map(h => h.wipMesAjustes), borderColor: PALETTE.violet,
+          backgroundColor: "transparent", tension: .3, pointRadius: 2, borderWidth: 2, order: 2,
+          datalabels: dlLastPoint(PALETTE.violet, { align: "bottom", offset: 6 }),
         },
         {
-          label: "Facturación real mes", data: hist.map(h => h.facturacionRealMes), type: "line", borderColor: PALETTE.secondary,
-          backgroundColor: "transparent", tension: .25, pointRadius: 3, order: 1,
-          datalabels: dlCompactCurrency(PALETTE.secondary, { align: "top", offset: 8 }),
+          label: "WIP mes (sin ajuste)", data: hist.map(h => h.wipMes), borderColor: colorWithAlpha(PALETTE.violet, .5),
+          backgroundColor: "transparent", borderDash: [4, 3], tension: .3, pointRadius: 0, borderWidth: 1.5, order: 3,
         },
       ],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      layout: { padding: { top: 22 } },
+      layout: { padding: { top: 24, right: 46, bottom: 10 } },
       interaction: { mode: "index", intersect: false },
       scales: {
         y: { ticks: { callback: v => fmtCompact(v) }, grid: { color: "rgba(255,255,255,.05)" } },

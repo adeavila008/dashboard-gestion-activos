@@ -94,6 +94,22 @@ function dlCompactCurrency(color, extra) {
     formatter: v => (v === null || v === undefined) ? "" : fmtCompact(v),
   }, extra || {}));
 }
+/** Para lineas con muchos puntos (series mensuales largas): en vez de una
+ * etiqueta por cada punto (ilegible, se amontonan unas con otras), solo
+ * marca el ULTIMO punto con dato real de esa serie -- que suele ser el
+ * numero que mas importa mirar (el acumulado/valor mas reciente). */
+function dlLastPoint(color, extra) {
+  return dlCompactCurrency(color, Object.assign({
+    display: ctx => {
+      const data = ctx.dataset.data;
+      for (let i = data.length - 1; i >= 0; i--) {
+        const v = data[i];
+        if (v !== null && v !== undefined && !isNaN(v)) return i === ctx.dataIndex;
+      }
+      return false;
+    },
+  }, extra || {}));
+}
 function dlPercent(color, dec, extra) {
   return dlBase(color, Object.assign({
     anchor: "end", align: "top", offset: 3,
