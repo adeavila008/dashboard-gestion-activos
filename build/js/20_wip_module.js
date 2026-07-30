@@ -274,7 +274,7 @@ function renderWipHistoricoTable(row) {
   const hist = [...row.historico].reverse();
   tbody.innerHTML = hist.map(h => `
     <tr class="${h.semanas && h.semanas.length ? "clickable" : ""}" data-mes="${escapeHtml(h.mes)}">
-      <td>${fmtDate(mesToLocalDate(h.mes))} ${h.semanas && h.semanas.length ? '<span class="text-faint" style="font-size:11px;">(semanal ⌄)</span>' : ""}</td>
+      <td>${mesToPeriodoLabel(h.mes)} ${h.semanas && h.semanas.length ? '<span class="text-faint" style="font-size:11px;">(semanal ⌄)</span>' : ""}</td>
       <td class="num">${fmtCOP(h.saldoWip)}</td>
       <td class="num">${fmtCOP(h.wipMesAjustes ?? h.wipMes)}</td>
       <td class="num">${fmtCOP(h.facturacionRealMes)}</td>
