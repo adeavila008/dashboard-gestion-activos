@@ -110,6 +110,25 @@ function dlLastPoint(color, extra) {
     },
   }, extra || {}));
 }
+/** Para lineas largas donde SI se quiere ver progresion (no solo el ultimo
+ * punto): marca 1 de cada N puntos, y siempre el ultimo dato real, para que
+ * no queden ilegibles pero tampoco "vacias" de etiquetas. */
+function dlSparse(color, everyN, extra) {
+  return dlCompactCurrency(color, Object.assign({
+    display: ctx => {
+      const data = ctx.dataset.data;
+      let lastValid = -1;
+      for (let i = data.length - 1; i >= 0; i--) {
+        const v = data[i];
+        if (v !== null && v !== undefined && !isNaN(v)) { lastValid = i; break; }
+      }
+      if (ctx.dataIndex === lastValid) return true;
+      const v = data[ctx.dataIndex];
+      if (v === null || v === undefined || isNaN(v)) return false;
+      return ctx.dataIndex % everyN === 0;
+    },
+  }, extra || {}));
+}
 function dlPercent(color, dec, extra) {
   return dlBase(color, Object.assign({
     anchor: "end", align: "top", offset: 3,

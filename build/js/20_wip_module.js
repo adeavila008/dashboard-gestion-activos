@@ -127,6 +127,9 @@ function renderWipEvolucionChart(row) {
   const proyAcum = row && row.facturacion ? proyeccionAcumulada(row.facturacion.proyeccionMensual) : [];
   const labels = hist.map(h => mesToPeriodoLabel(h.mes));
   const proyByKey = new Map(proyAcum.map(p => [mesKey(p.mes), p.acumulado]));
+  const wipAcum = wipAcumuladoBruto(hist);
+  // 1 de cada N etiquetas (mas seguido si hay pocos meses, mas espaciado si hay muchos)
+  const everyN = hist.length > 18 ? 3 : hist.length > 9 ? 2 : 1;
 
   upsertChart("chart-wip-evolucion", {
     type: "line",
@@ -134,25 +137,30 @@ function renderWipEvolucionChart(row) {
       labels,
       datasets: [
         {
-          label: "Saldo WIP", data: hist.map(h => h.saldoWip), borderColor: PALETTE.violet,
+          label: "Saldo WIP (neto pendiente)", data: hist.map(h => h.saldoWip), borderColor: PALETTE.violet,
           backgroundColor: colorWithAlpha(PALETTE.violet, .12), fill: true, tension: .25, pointRadius: 2,
-          datalabels: dlLastPoint(PALETTE.violet, { align: "bottom", offset: 6 }),
+          datalabels: dlSparse(PALETTE.violet, everyN, { align: "bottom", offset: 6 }),
+        },
+        {
+          label: "WIP acumulado (bruto)", data: wipAcum, borderColor: colorWithAlpha(PALETTE.violet, .6),
+          backgroundColor: "transparent", borderDash: [3, 3], tension: .25, pointRadius: 1,
+          datalabels: dlLastPoint(colorWithAlpha(PALETTE.violet, .8), { align: "start", offset: 6 }),
         },
         {
           label: "Facturación real acumulada", data: hist.map(h => h.facturacionRealAcum), borderColor: PALETTE.secondary,
           backgroundColor: "transparent", tension: .25, pointRadius: 2,
-          datalabels: dlLastPoint(PALETTE.secondary, { align: "bottom", offset: 6 }),
+          datalabels: dlSparse(PALETTE.secondary, everyN, { align: "top", offset: 6 }),
         },
         {
           label: "Proyección facturación acumulada", data: hist.map(h => proyByKey.get(mesKey(h.mes)) ?? null), borderColor: PALETTE.primary,
           borderDash: [5, 4], backgroundColor: "transparent", tension: .25, pointRadius: 2,
-          datalabels: dlLastPoint(PALETTE.primary, { align: "top", offset: 6 }),
+          datalabels: dlSparse(PALETTE.primary, everyN, { align: "top", offset: 20 }),
         },
       ],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      layout: { padding: { top: 24, right: 46, bottom: 10 } },
+      layout: { padding: { top: 26, right: 46, bottom: 10 } },
       interaction: { mode: "index", intersect: false },
       scales: {
         y: { ticks: { callback: v => fmtCompact(v) }, grid: { color: "rgba(255,255,255,.05)" } },

@@ -44,6 +44,25 @@ function proyeccionAcumulada(proyeccionMensual) {
   });
 }
 
+/**
+ * "WIP acumulado (bruto)": suma corrida mes a mes de "WIP mes +/- Ajustes"
+ * (el WIP que efectivamente se reconoce cada mes, ya con sus ajustes; si un
+ * mes no tiene ajustes se usa "WIP mes" a secas). Es DISTINTO de "Saldo WIP":
+ * el Saldo WIP es el saldo NETO pendiente (ya descuenta lo que se ha ido
+ * facturando/revirtiendo), mientras que este acumulado es el total BRUTO de
+ * WIP que ha entrado desde el inicio del proyecto, sin descontar nada. Sirve
+ * para ver, en la misma escala que la facturación acumulada, cuánto WIP se
+ * ha generado en total contra cuánto se ha facturado realmente.
+ */
+function wipAcumuladoBruto(historico) {
+  let acum = 0;
+  return (historico || []).map(h => {
+    const v = h.wipMesAjustes ?? h.wipMes;
+    if (typeof v === "number") acum += v;
+    return acum;
+  });
+}
+
 /** Convierte un "YYYY-MM-DD" a Date LOCAL (mismo criterio que
  * excelSerialToDate: nunca usar el parser de strings ISO de JS directo,
  * porque en timezone negativo corre la fecha un día hacia atrás). */
