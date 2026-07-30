@@ -146,6 +146,7 @@ function parseIBReportWorkbook(workbook) {
       fecha: idxMap.fecha !== undefined ? excelSerialToDate(row[idxMap.fecha]) : null,
       tipo: idxMap.tipo !== undefined ? row[idxMap.tipo] : null,
       numAsiento: idxMap.numAsiento !== undefined ? row[idxMap.numAsiento] : null,
+      secuencia: idxMap.secuencia !== undefined ? row[idxMap.secuencia] : null,
       descripcion: idxMap.descripcion !== undefined ? row[idxMap.descripcion] : null,
       tercero: idxMap.tercero !== undefined ? row[idxMap.tercero] : null,
       importe: Number(row[idxMap.importe]) || 0,

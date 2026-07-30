@@ -1,13 +1,25 @@
 """
-Extrae y filtra los datos reales (Direccion de Gestion de Activos) de los dos
+Extrae y filtra los datos reales (Direccion de Gestion de Activos) de los
 Excel fuente, y los deja listos como JSON compacto para embeber en el
 dashboard como dataset por defecto (el usuario puede reemplazarlo cargando un
 Excel nuevo desde el navegador).
 
-Uso:
-    python3 extract_data.py <ruta_ibreport.xlsx> <ruta_indicadores_ga.xlsx>
+El IBReport financiero se arma combinando DOS fuentes:
+  1. build/source/historical/*.xlsx -> exports "cerrados" de años anteriores
+     (2024, 2025, ...). Estos NO cambian nunca, se suben una sola vez y se
+     quedan ahi permanentemente (la carpeta esta excluida de git via
+     .gitignore, pero persiste en la carpeta local del proyecto).
+  2. El archivo "actual" (2026 en adelante), que se sigue actualizando mes a
+     mes hasta que termine el año -> ese se pasa como primer argumento (o se
+     busca por defecto en build/source/).
+Cuando un año se cierra, basta con mover/copiar su ultimo Excel a
+build/source/historical/ para que quede fijo como historico, y el primer
+argumento pasa a ser el Excel del año nuevo.
 
-Si no se pasan argumentos, busca los dos archivos por nombre dentro de
+Uso:
+    python3 extract_data.py <ruta_ibreport_actual.xlsx> <ruta_indicadores_ga.xlsx>
+
+Si no se pasan argumentos, busca los archivos por nombre dentro de
 build/source/ (carpeta local, no versionada en git por defecto).
 """
 import json
@@ -19,6 +31,7 @@ from datetime import datetime
 
 BUILD_DIR = os.path.dirname(os.path.abspath(__file__))
 SOURCE_DIR = os.path.join(BUILD_DIR, "source")
+HISTORICAL_DIR = os.path.join(SOURCE_DIR, "historical")
 OUT = os.path.join(BUILD_DIR, "data")
 
 DEFAULT_IBREPORT_NAME = "Consultoría - Inf. de ingresos, gastos y costos_Default (15).xlsx"
@@ -60,53 +73,109 @@ def clean(v):
     return v
 
 
-def extract_ibreport():
-    path = IBREPORT_PATH
-    wb = openpyxl.load_workbook(path, data_only=True)
-    ws = wb["IBReport 963"]
-    rows = list(ws.iter_rows(values_only=True))
-    headers = rows[0]
+IB_KEY_MAP = {
+    "Eri_est (T)": "eriEst",
+    "Direccion_linea (T)": "direccion",
+    "Cuenta_mayor": "cuentaMayorCod",
+    "Cuenta_mayor (T)": "cuentaMayor",
+    "Cuenta": "cuentaCod",
+    "Cuenta (T)": "cuenta",
+    "Proyecto": "proyectoCod",
+    "Proyecto (T)": "proyecto",
+    "Año": "anio",
+    "Periodo": "periodo",
+    "Fcha. Asto.": "fecha",
+    "Tipo de asientos": "tipo",
+    "Número de asiento": "numAsiento",
+    "Nº de secuencia": "secuencia",
+    "Descripción": "descripcion",
+    "Tercero (T)": "tercero",
+    "Importe": "importe",
+    "Empleado (T)": "empleado",
+    "Activos Fijos": "activoFijoCod",
+    "Activos Fijos (T)": "activoFijo",
+}
+IB_COLS = list(IB_KEY_MAP.values()) + ["esIngreso"]
+
+
+def _find_ibreport_sheet(wb):
+    for name in wb.sheetnames:
+        if "ibreport" in name.lower():
+            return name
+    return wb.sheetnames[0]
+
+
+def _extract_ibreport_rows(path):
+    """Lee UN Excel de IBReport y devuelve solo las filas de la Direccion de
+    Gestion de Activos, ya normalizadas segun IB_KEY_MAP/IB_COLS."""
+    wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    sheet_name = _find_ibreport_sheet(wb)
+    ws = wb[sheet_name]
+    rows_iter = ws.iter_rows(values_only=True)
+    headers = next(rows_iter)
     idx = {h: i for i, h in enumerate(headers)}
+    i_dir = idx.get("Direccion_linea (T)")
+    i_cmc = idx.get("Cuenta_mayor")
+    if i_dir is None or i_cmc is None:
+        raise ValueError(f"'{path}': no se encontraron las columnas esperadas de direccion/cuenta mayor.")
 
-    key_map = {
-        "Eri_est (T)": "eriEst",
-        "Direccion_linea (T)": "direccion",
-        "Cuenta_mayor": "cuentaMayorCod",
-        "Cuenta_mayor (T)": "cuentaMayor",
-        "Cuenta": "cuentaCod",
-        "Cuenta (T)": "cuenta",
-        "Proyecto": "proyectoCod",
-        "Proyecto (T)": "proyecto",
-        "Año": "anio",
-        "Periodo": "periodo",
-        "Fcha. Asto.": "fecha",
-        "Tipo de asientos": "tipo",
-        "Número de asiento": "numAsiento",
-        "Descripción": "descripcion",
-        "Tercero (T)": "tercero",
-        "Importe": "importe",
-        "Empleado (T)": "empleado",
-        "Activos Fijos": "activoFijoCod",
-        "Activos Fijos (T)": "activoFijo",
-    }
-    cols = list(key_map.values()) + ["esIngreso"]
-
-    out_rows = []
-    for row in rows[1:]:
-        if row[idx["Direccion_linea (T)"]] != DIRECCION:
+    out = []
+    for row in rows_iter:
+        if row[i_dir] != DIRECCION:
             continue
-        rec = []
-        for src in key_map:
-            rec.append(clean(row[idx[src]]))
-        cod = str(row[idx["Cuenta_mayor"]])
+        rec = [clean(row[idx[src]]) if src in idx else None for src in IB_KEY_MAP]
+        cod = str(row[i_cmc]) if row[i_cmc] is not None else ""
         rec.append(cod.startswith("4"))
-        out_rows.append(rec)
+        out.append(rec)
+    wb.close()
+    return out
 
-    payload = {"cols": cols, "rows": out_rows}
+
+def extract_ibreport():
+    # 1) historicos fijos (build/source/historical/*.xlsx), en orden alfabetico
+    #    (los nombres traen el rango de periodo, ej. "202401 - 202406", asi
+    #    que ordenan cronologicamente solos).
+    paths = []
+    if os.path.isdir(HISTORICAL_DIR):
+        for fn in sorted(os.listdir(HISTORICAL_DIR)):
+            if fn.lower().endswith((".xlsx", ".xls")):
+                paths.append(os.path.join(HISTORICAL_DIR, fn))
+    # 2) el Excel "actual" (año en curso), al final
+    if os.path.exists(IBREPORT_PATH):
+        paths.append(IBREPORT_PATH)
+    else:
+        print(f"AVISO: no se encontro el IBReport actual en '{IBREPORT_PATH}'.")
+
+    if not paths:
+        raise FileNotFoundError("No se encontro ningun IBReport (ni historico ni actual) para procesar.")
+
+    idx_key = {name: i for i, name in enumerate(IB_KEY_MAP.values())}
+    i_numAsiento, i_secuencia = idx_key["numAsiento"], idx_key["secuencia"]
+    i_cuentaMayorCod, i_periodo = idx_key["cuentaMayorCod"], idx_key["periodo"]
+    i_proyectoCod, i_importe = idx_key["proyectoCod"], idx_key["importe"]
+
+    seen = set()
+    all_rows = []
+    for path in paths:
+        rows = _extract_ibreport_rows(path)
+        added = 0
+        for rec in rows:
+            # dedup por si dos archivos llegaran a solaparse un mismo mes:
+            # un asiento contable puntual queda identificado por su numero de
+            # asiento + secuencia + cuenta + periodo + proyecto + importe.
+            key = (rec[i_numAsiento], rec[i_secuencia], rec[i_cuentaMayorCod], rec[i_periodo], rec[i_proyectoCod], rec[i_importe])
+            if key in seen:
+                continue
+            seen.add(key)
+            all_rows.append(rec)
+            added += 1
+        print(f"  {os.path.basename(path)}: {len(rows)} filas GA ({added} nuevas tras deduplicar)")
+
+    payload = {"cols": IB_COLS, "rows": all_rows}
     with open(f"{OUT}/default_ibreport.json", "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
-    print("IBReport GA rows:", len(out_rows))
-    return out_rows, cols
+    print("IBReport GA rows (total combinado, historico + actual):", len(all_rows))
+    return all_rows, IB_COLS
 
 
 def extract_baseline():
