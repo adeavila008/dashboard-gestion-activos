@@ -43,3 +43,12 @@ function proyeccionAcumulada(proyeccionMensual) {
     return { mes: m.mes, valor: m.valor, acumulado: acum };
   });
 }
+
+/** Convierte un "YYYY-MM-DD" a Date LOCAL (mismo criterio que
+ * excelSerialToDate: nunca usar el parser de strings ISO de JS directo,
+ * porque en timezone negativo corre la fecha un día hacia atrás). */
+function mesToLocalDate(iso) {
+  if (!iso) return null;
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
