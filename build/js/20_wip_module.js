@@ -66,6 +66,7 @@ function wipComparativoRows() {
       proyeccionMesSiguiente: proy.mesSiguiente ? proy.mesSiguiente.valor : null,
       historico: p.historico,
       facturacion: p.facturacion,
+      corteEntry: row || null, // la fila de historico EXACTA del corte resuelto (incluye .semanas de ESE mes)
     };
   });
 }
@@ -165,11 +166,21 @@ function renderWipEvolucionChart(row) {
   });
 }
 
+/**
+ * OJO: antes esta funcion buscaba "el mes mas reciente con detalle semanal
+ * en TODO el historico del proyecto", ignorando por completo el filtro de
+ * Año/Mes de corte -- por eso, sin importar que mes se filtrara, siempre
+ * aparecia la misma semana (la mas reciente). Ahora usa exactamente el mes
+ * ya resuelto por el filtro (row.corteEntry, el mismo que se usa en los KPIs
+ * y en la tabla comparativa): si ESE mes tiene detalle semanal se muestra;
+ * si no lo tiene, se oculta la tarjeta (no se sustituye por otro mes).
+ */
 function renderWipSemanalChart(row) {
   const canvas = document.getElementById("chart-wip-semanal");
   const card = canvas ? canvas.closest(".card") : null;
   if (!canvas) return;
-  const mesConSemanas = row ? [...row.historico].reverse().find(h => h.semanas && h.semanas.length && h.semanas.some(s => s.wipSemana !== null)) : null;
+  const entry = row ? row.corteEntry : null;
+  const mesConSemanas = (entry && entry.semanas && entry.semanas.length && entry.semanas.some(s => s.wipSemana !== null)) ? entry : null;
   if (!mesConSemanas) {
     if (card) card.style.display = "none";
     return;
