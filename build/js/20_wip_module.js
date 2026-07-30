@@ -112,12 +112,19 @@ function renderWipComparativoTable(rows) {
   });
 }
 
+/** Formato de periodo pedido explicitamente por el usuario para el eje X de
+ * esta grafica: "YYYYMM" (ej. "202501"), igual al formato de "periodo" que
+ * ya se usa en el IBReport financiero, en vez de "01 de jun de 2025". */
+function mesToPeriodoLabel(iso) {
+  return mesKey(iso) ? mesKey(iso).replace("-", "") : "—";
+}
+
 function renderWipEvolucionChart(row) {
   const canvas = document.getElementById("chart-wip-evolucion");
   if (!canvas) return;
   const hist = row ? row.historico : [];
   const proyAcum = row && row.facturacion ? proyeccionAcumulada(row.facturacion.proyeccionMensual) : [];
-  const labels = hist.map(h => fmtDate(mesToLocalDate(h.mes)));
+  const labels = hist.map(h => mesToPeriodoLabel(h.mes));
   const proyByKey = new Map(proyAcum.map(p => [mesKey(p.mes), p.acumulado]));
 
   upsertChart("chart-wip-evolucion", {
@@ -128,25 +135,31 @@ function renderWipEvolucionChart(row) {
         {
           label: "Saldo WIP", data: hist.map(h => h.saldoWip), borderColor: PALETTE.violet,
           backgroundColor: colorWithAlpha(PALETTE.violet, .12), fill: true, tension: .25, pointRadius: 2,
+          datalabels: dlCompactCurrency(PALETTE.violet, { align: "bottom", offset: 6 }),
         },
         {
           label: "Facturación real acumulada", data: hist.map(h => h.facturacionRealAcum), borderColor: PALETTE.secondary,
           backgroundColor: "transparent", tension: .25, pointRadius: 2,
+          datalabels: dlCompactCurrency(PALETTE.secondary, { align: "top", offset: 6 }),
         },
         {
           label: "Proyección facturación acumulada", data: hist.map(h => proyByKey.get(mesKey(h.mes)) ?? null), borderColor: PALETTE.primary,
           borderDash: [5, 4], backgroundColor: "transparent", tension: .25, pointRadius: 2,
+          datalabels: dlCompactCurrency(PALETTE.primary, { align: "top", offset: 18 }),
         },
       ],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 22, bottom: 10 } },
       interaction: { mode: "index", intersect: false },
-      scales: { y: { ticks: { callback: v => fmtCompact(v) } } },
+      scales: {
+        y: { ticks: { callback: v => fmtCompact(v) }, grid: { color: "rgba(255,255,255,.05)" } },
+        x: { grid: { display: false } },
+      },
       plugins: {
         legend: { position: "bottom" },
         tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmtCOP(ctx.parsed.y)}` } },
-        datalabels: { display: false },
       },
     },
   });
