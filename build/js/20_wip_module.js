@@ -235,12 +235,12 @@ function renderWipMensualChart(row) {
         {
           label: "Facturación real mes", data: hist.map(h => h.facturacionRealMes), borderColor: PALETTE.secondary,
           backgroundColor: colorWithAlpha(PALETTE.secondary, .1), fill: true, tension: .3, pointRadius: 3, borderWidth: 2.5, order: 1,
-          datalabels: dlCompactCurrency(PALETTE.secondary, { align: "top", offset: 6 }),
+          datalabels: dlNonZero(PALETTE.secondary, { align: "top", offset: 6 }),
         },
         {
           label: "WIP mes +/- ajustes", data: hist.map(h => h.wipMesAjustes), borderColor: PALETTE.violet,
           backgroundColor: "transparent", tension: .3, pointRadius: 2, borderWidth: 2, order: 2,
-          datalabels: dlLastPoint(PALETTE.violet, { align: "bottom", offset: 6 }),
+          datalabels: dlNonZero(PALETTE.violet, { align: "bottom", offset: 6 }),
         },
         {
           label: "WIP mes (sin ajuste)", data: hist.map(h => h.wipMes), borderColor: colorWithAlpha(PALETTE.violet, .5),

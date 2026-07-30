@@ -94,37 +94,50 @@ function dlCompactCurrency(color, extra) {
     formatter: v => (v === null || v === undefined) ? "" : fmtCompact(v),
   }, extra || {}));
 }
+// "meaningful" = no nulo/NaN y distinto de cero: series largas de WIP suelen
+// arrancar (o terminar) con varios meses en 0 antes de que el proyecto tenga
+// ejecucion, y llenar la grafica de etiquetas "0" repetidas se ve mal / no
+// aporta nada -- mejor no etiquetar esos puntos (la linea en 0 ya se ve sola).
+function _dlMeaningful(v) { return v !== null && v !== undefined && !isNaN(v) && v !== 0; }
+/** Etiqueta en TODOS los puntos con dato real (no cero) -- para series con
+ * pocos meses o donde cada punto importa (a diferencia de dlSparse, que
+ * espacia 1 de cada N para series muy largas). */
+function dlNonZero(color, extra) {
+  return dlCompactCurrency(color, Object.assign({
+    display: ctx => _dlMeaningful(ctx.dataset.data[ctx.dataIndex]),
+  }, extra || {}));
+}
+
 /** Para lineas con muchos puntos (series mensuales largas): en vez de una
  * etiqueta por cada punto (ilegible, se amontonan unas con otras), solo
- * marca el ULTIMO punto con dato real de esa serie -- que suele ser el
- * numero que mas importa mirar (el acumulado/valor mas reciente). */
+ * marca el ULTIMO punto con dato real (y distinto de cero) de esa serie --
+ * que suele ser el numero que mas importa mirar (el acumulado/valor mas
+ * reciente). */
 function dlLastPoint(color, extra) {
   return dlCompactCurrency(color, Object.assign({
     display: ctx => {
       const data = ctx.dataset.data;
       for (let i = data.length - 1; i >= 0; i--) {
-        const v = data[i];
-        if (v !== null && v !== undefined && !isNaN(v)) return i === ctx.dataIndex;
+        if (_dlMeaningful(data[i])) return i === ctx.dataIndex;
       }
       return false;
     },
   }, extra || {}));
 }
 /** Para lineas largas donde SI se quiere ver progresion (no solo el ultimo
- * punto): marca 1 de cada N puntos, y siempre el ultimo dato real, para que
- * no queden ilegibles pero tampoco "vacias" de etiquetas. */
+ * punto): marca 1 de cada N puntos, y siempre el ultimo dato real (no cero),
+ * para que no queden ilegibles pero tampoco "vacias" de etiquetas -- y sin
+ * repetir "0" en cada mes sin ejecucion. */
 function dlSparse(color, everyN, extra) {
   return dlCompactCurrency(color, Object.assign({
     display: ctx => {
       const data = ctx.dataset.data;
       let lastValid = -1;
       for (let i = data.length - 1; i >= 0; i--) {
-        const v = data[i];
-        if (v !== null && v !== undefined && !isNaN(v)) { lastValid = i; break; }
+        if (_dlMeaningful(data[i])) { lastValid = i; break; }
       }
       if (ctx.dataIndex === lastValid) return true;
-      const v = data[ctx.dataIndex];
-      if (v === null || v === undefined || isNaN(v)) return false;
+      if (!_dlMeaningful(data[ctx.dataIndex])) return false;
       return ctx.dataIndex % everyN === 0;
     },
   }, extra || {}));
