@@ -28,7 +28,7 @@ function kpiCard(opts) {
     </span>`;
   const formulaHtml = opts.formula ? `<div class="kpi-formula" title="${escapeHtml(opts.formulaTitle || "")}">${opts.formula}</div>` : "";
   return `
-  <div class="kpi-card" style="--accent:${opts.color};--accent-soft:${colorWithAlpha(opts.color, .14)};--accent-glow:${colorWithAlpha(opts.color, .16)}">
+  <div class="kpi-card${opts.extraClass ? " " + opts.extraClass : ""}"${opts.id ? ` id="${opts.id}"` : ""} style="--accent:${opts.color};--accent-soft:${colorWithAlpha(opts.color, .14)};--accent-glow:${colorWithAlpha(opts.color, .16)}">
     <div class="kpi-top">
       <div class="kpi-icon">${opts.icon}</div>
       ${trendHtml}
@@ -62,7 +62,7 @@ function renderFinancieroKPIs(rows) {
   const wrap = document.getElementById("fin-kpis");
   wrap.innerHTML =
     kpiCard({ label: "Ingresos", value: fmtCOP(kpi.ingresos), icon: ICONS.ingresos, color: PALETTE.secondary, trend: trendIngresos, foot: kpi.count + " transacciones en el filtro" }) +
-    kpiCard({ label: "Costos", value: fmtCOP(kpi.costos), icon: ICONS.costos, color: PALETTE.danger, trend: trendCostos !== null ? -trendCostos : null, foot: "vs. mes anterior (serie completa)" }) +
+    kpiCard({ label: "Costos", value: fmtCOP(kpi.costos), icon: ICONS.costos, color: PALETTE.danger, trend: trendCostos !== null ? -trendCostos : null, foot: "vs. mes anterior · clic para ver el detalle y elegir un rango de periodo", extraClass: "clickable", id: "kpi-costos-totales" }) +
     kpiCard({
       label: "Margen", value: fmtCOP(kpi.margen), icon: ICONS.margen, color: PALETTE.primary, trend: trendMargen,
       foot: kpi.margen >= 0 ? "Resultado positivo" : "Resultado negativo",
@@ -70,4 +70,7 @@ function renderFinancieroKPIs(rows) {
       formulaTitle: `${fmtCOP(kpi.ingresos)} − ${fmtCOP(kpi.costos)} = ${fmtCOP(kpi.margen)}`,
     }) +
     kpiCard({ label: "Margen %", value: fmtPct(kpi.margenPct), icon: ICONS.margenPct, color: kpi.margenPct >= CFG.metaMargen ? PALETTE.success : PALETTE.warning, trend: trendMargenPct, foot: "meta ≥ " + CFG.metaMargen + "%" });
+
+  const costosCard = document.getElementById("kpi-costos-totales");
+  if (costosCard) costosCard.addEventListener("click", () => openCostosTotalesModal(getFilteredIBRows({ ignoreMes: true })));
 }

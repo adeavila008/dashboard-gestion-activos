@@ -431,6 +431,80 @@ function openCostoCategoriaModal(cat, rows, totalAmbasCategorias) {
   wireModalPeriodoRange(idPrefix, renderContent);
 }
 
+/** "Costos totales" = Costos directos + Otros costos JUNTOS (sin doble
+ * conteo), agrupados por cuenta mayor -- para responder de una sola vez
+ * "¿cuánto costó todo, en este rango de periodo?" sin tener que abrir el
+ * modal de Directos y el de Otros por separado y sumarlos a mano. Se abre
+ * desde la tarjeta KPI "Costos" (ver 07_kpis.js) con TODOS los periodos
+ * disponibles segun los filtros de Proyecto/Año activos (ignora el filtro
+ * de "Mes" para que el rango Desde/Hasta de aca adentro pueda cubrir varios
+ * meses, ej. 202503 a 202507). */
+function openCostosTotalesModal(rows) {
+  const idPrefix = "modal-costos";
+  const title = "Costos totales";
+  const soloCostos = rows.filter(r => !r.esIngreso);
+
+  function computeView(desde, hasta) {
+    const filtered = filterByPeriodoRange(soloCostos, desde, hasta);
+    const total = sumBy(filtered, r => r.importe);
+    const totalDirectos = sumBy(filtered.filter(r => costoCategoria(r) === "directo"), r => r.importe);
+    const totalOtros = total - totalDirectos;
+    const porCuenta = costosPorCuentaMayor(filtered);
+    const porEmpleado = costoPorPersonal(filtered).slice(0, 8);
+    return { filtered, total, totalDirectos, totalOtros, porCuenta, porEmpleado };
+  }
+
+  function renderContent(desde, hasta) {
+    const { filtered, total, totalDirectos, totalOtros, porCuenta, porEmpleado } = computeView(desde, hasta);
+    const cuentasHtml = porCuenta.map((d, i) => `
+      <div class="gerente-row clickable" data-idx="${i}" title="Clic para ver el detalle de esta cuenta">
+        <span class="name">${escapeHtml(d.label)}</span>
+        <span class="pct">${fmtCOP(d.value)} · ${fmtPct(total ? d.value / total * 100 : 0, 0)}</span>
+      </div>`).join("");
+    const empHtml = porEmpleado.length ? `
+      <div class="section-title" style="font-size:12px;margin:14px 0 6px;">Personal involucrado</div>
+      <div class="gerente-list gerente-list-scroll">${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}</div>` : "";
+
+    document.getElementById(idPrefix + "-content").innerHTML = `
+      <div class="modal-kpis">
+        <div class="modal-kpi"><div class="l">Total</div><div class="v">${fmtCOP(total)}</div></div>
+        <div class="modal-kpi"><div class="l">Costos directos</div><div class="v" style="color:${PALETTE.danger}">${fmtCOP(totalDirectos)}</div></div>
+        <div class="modal-kpi"><div class="l">Otros costos</div><div class="v" style="color:${PALETTE.violet}">${fmtCOP(totalOtros)}</div></div>
+        <div class="modal-kpi"><div class="l"># Transacciones</div><div class="v">${filtered.length}</div></div>
+      </div>
+      <div class="section-title" style="font-size:12px;margin-bottom:6px;">Cuentas mayores incluidas <span class="text-faint" style="font-weight:500;text-transform:none;">· clic en una para ver su detalle</span></div>
+      <div class="gerente-list gerente-list-scroll" id="${idPrefix}-cuentas-list">${cuentasHtml || '<div class="text-faint" style="font-size:12px;">Sin cuentas para este filtro.</div>'}</div>
+      ${empHtml}
+      <div class="mt-8"></div>
+      ${miniTxTable(filtered, 80)}`;
+
+    document.querySelectorAll("#" + idPrefix + "-cuentas-list .gerente-row[data-idx]").forEach(elx => {
+      elx.addEventListener("click", () => {
+        const item = porCuenta[Number(elx.dataset.idx)];
+        openCuentaBreakdownModal(item, title + " › " + item.label, () => openCostosTotalesModal(rows));
+      });
+    });
+  }
+
+  function getExportData(desde, hasta) {
+    const { filtered, total, totalDirectos, totalOtros, porCuenta } = computeView(desde, hasta);
+    const periodoLabel = periodoRangeLabel(desde, hasta);
+    return {
+      title: title + (periodoLabel !== "Todos" ? " — " + periodoLabel : ""),
+      sub: "Costos directos + otros costos combinados · periodo: " + periodoLabel,
+      resumenPares: [["Total", fmtCOP(total)], ["Costos directos", fmtCOP(totalDirectos)], ["Otros costos", fmtCOP(totalOtros)], ["Periodo", periodoLabel], ["Transacciones", String(filtered.length)]],
+      cuentasRows: porCuenta.map(c => ({ label: c.label, value: c.value, pct: total ? c.value / total * 100 : 0, rows: c.rows })),
+      txRows: filtered,
+    };
+  }
+
+  openModal(title, "Costos directos + otros costos combinados · según los filtros activos (Proyecto/Año) — elige el rango de periodo abajo",
+    modalExportBarHtml(idPrefix, soloCostos) + `<div id="${idPrefix}-content"></div>`);
+  renderContent("", "");
+  wireModalExportBar(idPrefix, getExportData);
+  wireModalPeriodoRange(idPrefix, renderContent);
+}
+
 function openMatrixCellModal(cuenta, periodo, matrix, periodos) {
   const idPrefix = "modal-cell";
   const rows = getFilteredIBRows({ ignoreMes: true }).filter(r => !r.esIngreso && r.cuentaMayor === cuenta && r.periodo === periodo);

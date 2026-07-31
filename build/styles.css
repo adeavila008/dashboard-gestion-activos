@@ -194,6 +194,8 @@ input[type=file]{display:none;}
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
   padding:16px 18px;box-shadow:var(--shadow-card);position:relative;overflow:hidden;
 }
+.kpi-card.clickable{cursor:pointer;transition:transform .12s,border-color .12s;}
+.kpi-card.clickable:hover{transform:translateY(-1px);border-color:#2f3d5c;}
 .kpi-card::after{
   content:"";position:absolute;inset:auto -30% -60% auto;width:140px;height:140px;
   background:radial-gradient(circle,var(--accent-glow,rgba(240,166,58,.16)),transparent 70%);
