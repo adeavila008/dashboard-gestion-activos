@@ -86,4 +86,32 @@ function wireNav() {
       else openChartExpandModal(target);
     });
   });
+
+  wireRefreshPublished();
+}
+
+/**
+ * Boton "Actualizar" del modulo Financiero: el dashboard es una pagina
+ * ESTATICA en GitHub Pages (sin servidor propio), asi que este boton NO
+ * puede disparar la extraccion/publicacion de datos por si solo -- eso
+ * sigue siendo algo que hay que pedirle a Claude por chat (ver skill
+ * "actualizar-dashboard-ga"). Lo que SI puede (y vale la pena) hacer es
+ * forzar al navegador a traer la version MAS RECIENTE ya publicada,
+ * saltandose cualquier copia vieja que haya quedado en cache -- por eso el
+ * cache-busting con un parametro unico en la URL.
+ */
+function wireRefreshPublished() {
+  const btn = document.getElementById("btn-refresh-published");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const usoDatosPropios = STATE.ib.source === "upload" || STATE.baseline.source === "upload";
+    if (usoDatosPropios) {
+      const ok = window.confirm("Vas a recargar la última versión publicada del dashboard. Esto reemplaza el Excel que cargaste manualmente en esta sesión (no se guarda). ¿Continuar?");
+      if (!ok) return;
+    }
+    showToast("Actualizando", "Cargando la última versión publicada del dashboard…", "info");
+    const url = new URL(window.location.href);
+    url.searchParams.set("v", Date.now().toString());
+    setTimeout(() => { window.location.href = url.toString(); }, 300);
+  });
 }
