@@ -112,6 +112,7 @@ function wireRefreshPublished() {
     showToast("Actualizando", "Cargando la última versión publicada del dashboard…", "info");
     const url = new URL(window.location.href);
     url.searchParams.set("v", Date.now().toString());
+    url.searchParams.set("view", STATE.view); // para volver a la MISMA vista tras recargar (ver initApp en 18_init.js)
     setTimeout(() => { window.location.href = url.toString(); }, 300);
   });
 }
