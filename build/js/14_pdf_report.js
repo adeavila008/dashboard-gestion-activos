@@ -98,8 +98,16 @@ async function generateExecutiveReport(anios, proyectos) {
       data: {
         labels: serie.map(s => periodoToLabel(s.periodo)),
         datasets: [
-          { label: "Ingresos", data: serie.map(s => s.ingresos), backgroundColor: PALETTE.secondary, borderRadius: 4, datalabels: reportDatalabel() },
-          { label: "Costos", data: serie.map(s => s.costos), backgroundColor: PALETTE.danger, borderRadius: 4, datalabels: reportDatalabel() },
+          { label: "Ingresos", data: serie.map(s => s.ingresos), backgroundColor: PALETTE.secondary, borderRadius: 4, order: 2, datalabels: reportDatalabel() },
+          { label: "Costos", data: serie.map(s => s.costos), backgroundColor: PALETTE.danger, borderRadius: 4, order: 2, datalabels: reportDatalabel() },
+          // Margen (BAI) en la MISMA escala de pesos que Ingresos/Costos (no
+          // en %), como linea superpuesta -- asi se compara directo contra
+          // las barras sin necesitar un segundo eje.
+          {
+            label: "Margen (BAI)", data: serie.map(s => s.margen), type: "line", borderColor: PALETTE.primary,
+            backgroundColor: PALETTE.primary, tension: .3, pointRadius: 3, pointBackgroundColor: PALETTE.primary,
+            borderWidth: 2, order: 1, datalabels: reportDatalabel({ color: "#b45309", align: "top", anchor: "end" }),
+          },
         ],
       },
       options: {
