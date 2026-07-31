@@ -20,6 +20,24 @@ function switchView(view) {
   if (view === "salud") renderSalud();
   if (view === "wip") renderWip();
   if (view === "inicio") renderHomeStats();
+  syncViewInUrl(view);
+}
+
+/** Mantiene el parametro "?view=" de la URL sincronizado con la vista
+ * activa (SIN recargar la pagina -- history.replaceState no dispara
+ * navegacion). Antes solo se fijaba al hacer clic en "Actualizar" en
+ * Financiero, asi que si despues el usuario navegaba a otra vista por el
+ * menu lateral, la URL se quedaba mostrando "view=financiero" aunque ya
+ * estuviera en Salud/WIP -- confuso si recargabas o compartias el link.
+ * Ahora cualquier cambio de vista (clic en el menu, no solo el boton
+ * Actualizar) actualiza la URL para que siempre refleje donde estas. */
+function syncViewInUrl(view) {
+  if (!window.history || !window.history.replaceState) return;
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", view);
+    window.history.replaceState(null, "", url.toString());
+  } catch (e) { /* si el navegador bloquea replaceState (ej. file://), no pasa nada grave */ }
 }
 
 function updateBadgePeriod() {
