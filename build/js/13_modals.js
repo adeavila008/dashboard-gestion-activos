@@ -73,6 +73,153 @@ function openMatrixExpandModal() {
   });
 }
 
+/* ---------- Exportacion de modales de detalle (Excel / PDF / Imagen) ----------
+   Todos los modales que muestran transacciones (miniTxTable) comparten esta
+   barra: un selector de PERIODO que filtra SOLO dentro del modal (sin tocar
+   los filtros globales del dashboard, para no perder el contexto al
+   cerrarlo) y 3 botones de descarga que exportan TODAS las transacciones del
+   contexto actual (cuenta / categoria / mes), no solo las 80 que se
+   muestran en pantalla. */
+
+function uniquePeriodos(rows) {
+  return uniqueSorted(rows.map(r => r.periodo)).map(Number).sort((a, b) => a - b);
+}
+
+function modalExportBarHtml(idPrefix, rows, showPeriodo) {
+  const periodos = uniquePeriodos(rows);
+  const opts = '<option value="">Todos los periodos</option>' +
+    periodos.map(p => `<option value="${p}">${escapeHtml(periodoToLabel(p))}</option>`).join("");
+  const periodoHtml = showPeriodo === false ? "" :
+    `<div><span class="l">Periodo: </span><select class="modal-export-select" id="${idPrefix}-periodo">${opts}</select></div>`;
+  return `
+    <div class="modal-export-bar">
+      ${periodoHtml}
+      <div class="modal-export-actions">
+        <button class="btn btn-ghost btn-sm" id="${idPrefix}-export-xlsx" title="Descargar Excel (todas las transacciones del contexto actual)">⬇ Excel</button>
+        <button class="btn btn-ghost btn-sm" id="${idPrefix}-export-pdf" title="Descargar PDF">⬇ PDF</button>
+        <button class="btn btn-ghost btn-sm" id="${idPrefix}-export-img" title="Descargar imagen">⬇ Imagen</button>
+      </div>
+    </div>`;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 250);
+}
+
+function slugFilename(s) {
+  return (String(s || "detalle")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase()) || "detalle";
+}
+
+/** Hoja "Resumen" (KPIs + periodo aplicado) + hoja opcional "Cuentas
+ * mayores" + hoja "Transacciones" con TODAS las filas (no solo las 80
+ * mostradas en el modal). */
+function exportModalExcel(filenameBase, title, resumenPares, cuentasRows, txRows) {
+  const wb = XLSX.utils.book_new();
+  const wsResumen = XLSX.utils.aoa_to_sheet([[title], [], ...resumenPares]);
+  XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
+  if (cuentasRows && cuentasRows.length) {
+    const wsCuentas = XLSX.utils.aoa_to_sheet([
+      ["Cuenta mayor", "Valor", "% del total"],
+      ...cuentasRows.map(c => [c.label, c.value, c.pct != null ? c.pct.toFixed(1) + "%" : ""]),
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsCuentas, "Cuentas mayores");
+  }
+  const wsTx = XLSX.utils.json_to_sheet(txRows.map(r => ({
+    Fecha: r.fecha ? fmtDate(r.fecha) : "",
+    Periodo: r.periodo != null ? periodoToLabel(r.periodo) : "",
+    "Cuenta mayor": r.cuentaMayor || "",
+    Descripcion: r.descripcion || "",
+    Tercero: r.tercero || "",
+    Empleado: r.empleado || "",
+    Importe: r.importe,
+  })));
+  XLSX.utils.book_append_sheet(wb, wsTx, "Transacciones");
+  XLSX.writeFile(wb, filenameBase + ".xlsx");
+}
+
+function exportModalPDF(filenameBase, title, sub, resumenPares, cuentasRows, txRows) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 36;
+  doc.setFillColor(17, 24, 39);
+  doc.rect(0, 0, pageW, 58, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+  doc.text(title, margin, 26);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9.5);
+  doc.text(sub || "", margin, 42);
+  doc.setTextColor(20, 20, 20);
+  let y = 80;
+  doc.autoTable({
+    startY: y, margin: { left: margin, right: margin },
+    head: [["Campo", "Valor"]], body: resumenPares,
+    theme: "grid", styles: { fontSize: 9, cellPadding: 5 }, headStyles: { fillColor: [240, 166, 58], textColor: 20 },
+  });
+  y = doc.lastAutoTable.finalY + 18;
+  if (cuentasRows && cuentasRows.length) {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    doc.text("Cuentas mayores incluidas", margin, y); y += 8;
+    doc.autoTable({
+      startY: y, margin: { left: margin, right: margin },
+      head: [["Cuenta mayor", "Valor", "%"]],
+      body: cuentasRows.map(c => [c.label, fmtCOP(c.value), c.pct != null ? c.pct.toFixed(1) + "%" : "—"]),
+      theme: "striped", styles: { fontSize: 8.5, cellPadding: 5 }, headStyles: { fillColor: [139, 143, 245], textColor: 255 },
+    });
+    y = doc.lastAutoTable.finalY + 18;
+  }
+  if (y > 680) { doc.addPage(); y = 40; }
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text("Transacciones (" + txRows.length + ")", margin, y); y += 8;
+  doc.autoTable({
+    startY: y, margin: { left: margin, right: margin },
+    head: [["Fecha", "Periodo", "Cuenta mayor", "Descripción", "Tercero", "Empleado", "Importe"]],
+    body: txRows.map(r => [
+      r.fecha ? fmtDate(r.fecha) : "—", r.periodo != null ? periodoToLabel(r.periodo) : "—",
+      r.cuentaMayor || "—", r.descripcion || "—", r.tercero || "—", r.empleado || "—", fmtCOP(r.importe),
+    ]),
+    theme: "grid", styles: { fontSize: 7, cellPadding: 3 }, headStyles: { fillColor: [52, 195, 217], textColor: 20 },
+  });
+  doc.save(filenameBase + ".pdf");
+}
+
+function exportModalImage(filenameBase) {
+  if (typeof html2canvas === "undefined") { showToast("Imagen", "La librería de imagen aún está cargando, intenta de nuevo en un momento.", "warning"); return; }
+  const el = document.getElementById("modal-body");
+  if (!el) return;
+  html2canvas(el, { backgroundColor: "#0b1220", scale: 2, useCORS: true }).then(canvas => {
+    canvas.toBlob(blob => { if (blob) downloadBlob(blob, filenameBase + ".png"); });
+  }).catch(() => showToast("Imagen", "No se pudo generar la imagen.", "warning"));
+}
+
+/** Engancha los 3 botones de descarga de la barra de exportacion.
+ * "getExportData(periodoFiltro)" debe devolver { title, sub, resumenPares,
+ * cuentasRows, txRows } ya calculados para ese periodo (o para todos si
+ * periodoFiltro es ""). El selector de periodo en si (para refrescar lo que
+ * se VE en el modal) se engancha por fuera, en cada funcion openXxxModal. */
+function wireModalExportBar(idPrefix, getExportData) {
+  const sel = document.getElementById(idPrefix + "-periodo");
+  const btnXlsx = document.getElementById(idPrefix + "-export-xlsx");
+  const btnPdf = document.getElementById(idPrefix + "-export-pdf");
+  const btnImg = document.getElementById(idPrefix + "-export-img");
+  const curPeriodo = () => (sel ? sel.value : "");
+  if (btnXlsx) btnXlsx.addEventListener("click", () => {
+    const d = getExportData(curPeriodo());
+    exportModalExcel(slugFilename(d.title), d.title, d.resumenPares, d.cuentasRows, d.txRows);
+  });
+  if (btnPdf) btnPdf.addEventListener("click", () => {
+    const d = getExportData(curPeriodo());
+    exportModalPDF(slugFilename(d.title), d.title, d.sub, d.resumenPares, d.cuentasRows, d.txRows);
+  });
+  if (btnImg) btnImg.addEventListener("click", () => exportModalImage(slugFilename(getExportData(curPeriodo()).title)));
+}
+
 function miniTxTable(rows, limit) {
   const sorted = rows.slice().sort((a, b) => Math.abs(b.importe) - Math.abs(a.importe));
   const shown = sorted.slice(0, limit || 60);
@@ -89,76 +236,147 @@ function miniTxTable(rows, limit) {
 }
 
 function openMonthDetailModal(periodo) {
+  const idPrefix = "modal-month";
   const rows = getFilteredIBRows({ ignoreMes: true }).filter(r => r.periodo === periodo);
+  const titleBase = "Detalle de " + periodoToLabel(periodo);
+
   const kpi = computeFinancieroKPIs(rows);
-  const body = `
-    <div class="modal-kpis">
-      <div class="modal-kpi"><div class="l">Ingresos</div><div class="v" style="color:var(--secondary)">${fmtCOP(kpi.ingresos)}</div></div>
-      <div class="modal-kpi"><div class="l">Costos</div><div class="v" style="color:var(--danger)">${fmtCOP(kpi.costos)}</div></div>
-      <div class="modal-kpi"><div class="l">Margen</div><div class="v">${fmtCOP(kpi.margen)}</div></div>
-      <div class="modal-kpi"><div class="l">Margen %</div><div class="v">${fmtPct(kpi.margenPct)}</div></div>
-    </div>
-    ${miniTxTable(rows, 80)}`;
-  openModal("Detalle de " + periodoToLabel(periodo), kpi.count + " transacciones en el mes (según filtros activos)", body);
+  function renderContent() {
+    document.getElementById(idPrefix + "-content").innerHTML = `
+      <div class="modal-kpis">
+        <div class="modal-kpi"><div class="l">Ingresos</div><div class="v" style="color:var(--secondary)">${fmtCOP(kpi.ingresos)}</div></div>
+        <div class="modal-kpi"><div class="l">Costos</div><div class="v" style="color:var(--danger)">${fmtCOP(kpi.costos)}</div></div>
+        <div class="modal-kpi"><div class="l">Margen</div><div class="v">${fmtCOP(kpi.margen)}</div></div>
+        <div class="modal-kpi"><div class="l">Margen %</div><div class="v">${fmtPct(kpi.margenPct)}</div></div>
+      </div>
+      ${miniTxTable(rows, 80)}`;
+  }
+  function getExportData() {
+    const filtered = rows;
+    return {
+      title: titleBase, sub: kpi.count + " transacciones en el mes",
+      resumenPares: [["Ingresos", fmtCOP(kpi.ingresos)], ["Costos", fmtCOP(kpi.costos)], ["Margen", fmtCOP(kpi.margen)], ["Margen %", fmtPct(kpi.margenPct)], ["Transacciones", String(filtered.length)]],
+      cuentasRows: null, txRows: filtered,
+    };
+  }
+
+  openModal(titleBase, rows.length + " transacciones en el mes (según filtros activos)",
+    modalExportBarHtml(idPrefix, rows, false) + `<div id="${idPrefix}-content"></div>`); // sin selector: ya esta acotado a un solo mes
+  renderContent();
+  wireModalExportBar(idPrefix, getExportData);
 }
 
 function openCuentaBreakdownModal(item, kindLabel, backFn) {
-  const porEmpleado = costoPorPersonal(item.rows).slice(0, 8);
-  const empHtml = porEmpleado.length ? `
-    <div class="section-title" style="font-size:12px;margin:14px 0 6px;">Personal / terceros involucrados</div>
-    <div class="gerente-list gerente-list-scroll">
-      ${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}
-    </div>` : "";
-  const backHtml = backFn ? `<button class="btn btn-ghost btn-sm" id="modal-back-btn" style="margin-bottom:12px;">‹ Volver</button>` : "";
-  const body = `
-    ${backHtml}
-    <div class="modal-kpis">
-      <div class="modal-kpi"><div class="l">Total</div><div class="v">${fmtCOP(item.value)}</div></div>
-      <div class="modal-kpi"><div class="l"># Transacciones</div><div class="v">${item.rows.length}</div></div>
-    </div>
-    ${empHtml}
-    <div class="mt-8"></div>
-    ${miniTxTable(item.rows, 80)}`;
-  openModal(item.label, kindLabel, body);
-  if (backFn) document.getElementById("modal-back-btn").addEventListener("click", backFn);
+  const idPrefix = "modal-cuenta";
+  const rows = item.rows;
+
+  function computeView(periodoFiltro) {
+    const filtered = periodoFiltro ? rows.filter(r => String(r.periodo) === String(periodoFiltro)) : rows;
+    return { filtered, total: sumBy(filtered, r => r.importe), porEmpleado: costoPorPersonal(filtered).slice(0, 8) };
+  }
+
+  function renderContent(periodoFiltro) {
+    const { filtered, total, porEmpleado } = computeView(periodoFiltro);
+    const empHtml = porEmpleado.length ? `
+      <div class="section-title" style="font-size:12px;margin:14px 0 6px;">Personal / terceros involucrados</div>
+      <div class="gerente-list gerente-list-scroll">
+        ${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}
+      </div>` : "";
+    const backHtml = backFn ? `<button class="btn btn-ghost btn-sm" id="modal-back-btn" style="margin-bottom:12px;">‹ Volver</button>` : "";
+    document.getElementById(idPrefix + "-content").innerHTML = `
+      ${backHtml}
+      <div class="modal-kpis">
+        <div class="modal-kpi"><div class="l">Total</div><div class="v">${fmtCOP(total)}</div></div>
+        <div class="modal-kpi"><div class="l"># Transacciones</div><div class="v">${filtered.length}</div></div>
+      </div>
+      ${empHtml}
+      <div class="mt-8"></div>
+      ${miniTxTable(filtered, 80)}`;
+    if (backFn) { const b = document.getElementById("modal-back-btn"); if (b) b.addEventListener("click", backFn); }
+  }
+
+  function getExportData(periodoFiltro) {
+    const { filtered, total } = computeView(periodoFiltro);
+    const periodoLabel = periodoFiltro ? periodoToLabel(Number(periodoFiltro)) : "Todos";
+    return {
+      title: item.label + (periodoFiltro ? " — " + periodoLabel : ""), sub: kindLabel + " · periodo: " + periodoLabel,
+      resumenPares: [["Total", fmtCOP(total)], ["Periodo", periodoLabel], ["Transacciones", String(filtered.length)]],
+      cuentasRows: null, txRows: filtered,
+    };
+  }
+
+  openModal(item.label, kindLabel, modalExportBarHtml(idPrefix, rows) + `<div id="${idPrefix}-content"></div>`);
+  renderContent("");
+  wireModalExportBar(idPrefix, getExportData);
+  const sel = document.getElementById(idPrefix + "-periodo");
+  if (sel) sel.addEventListener("change", () => renderContent(sel.value));
 }
 
 function openCostoCategoriaModal(cat, rows, totalAmbasCategorias) {
-  const total = sumBy(rows, r => r.importe);
-  const porCuenta = costosPorCuentaMayor(rows);
+  const idPrefix = "modal-cat";
   const catLabel = cat === "directo" ? "Costos directos" : "Otros costos";
-  const cuentasHtml = porCuenta.map((d, i) => `
-    <div class="gerente-row clickable" data-idx="${i}" title="Clic para ver el detalle de esta cuenta">
-      <span class="name">${escapeHtml(d.label)}</span>
-      <span class="pct">${fmtCOP(d.value)} · ${fmtPct(total ? d.value / total * 100 : 0, 0)}</span>
-    </div>`).join("");
-  const porEmpleado = costoPorPersonal(rows).slice(0, 8);
-  const empHtml = porEmpleado.length ? `
-    <div class="section-title" style="font-size:12px;margin:14px 0 6px;">Personal involucrado</div>
-    <div class="gerente-list gerente-list-scroll">${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}</div>` : "";
 
-  const body = `
-    <div class="modal-kpis">
-      <div class="modal-kpi"><div class="l">Total</div><div class="v">${fmtCOP(total)}</div></div>
-      <div class="modal-kpi"><div class="l">% del total de costos</div><div class="v">${fmtPct(totalAmbasCategorias ? total / totalAmbasCategorias * 100 : 0)}</div></div>
-      <div class="modal-kpi"><div class="l"># Transacciones</div><div class="v">${rows.length}</div></div>
-    </div>
-    <div class="section-title" style="font-size:12px;margin-bottom:6px;">Cuentas mayores incluidas <span class="text-faint" style="font-weight:500;text-transform:none;">· clic en una para ver su detalle</span></div>
-    <div class="gerente-list gerente-list-scroll" id="modal-cuentas-list">${cuentasHtml || '<div class="text-faint" style="font-size:12px;">Sin cuentas para este filtro.</div>'}</div>
-    ${empHtml}
-    <div class="mt-8"></div>
-    ${miniTxTable(rows, 80)}`;
-  openModal(catLabel, "Clasificación oficial del IBReport (campo Eri_est) · según los filtros activos", body);
+  function computeView(periodoFiltro) {
+    const filtered = periodoFiltro ? rows.filter(r => String(r.periodo) === String(periodoFiltro)) : rows;
+    const total = sumBy(filtered, r => r.importe);
+    const porCuenta = costosPorCuentaMayor(filtered);
+    const porEmpleado = costoPorPersonal(filtered).slice(0, 8);
+    return { filtered, total, porCuenta, porEmpleado };
+  }
 
-  document.querySelectorAll("#modal-cuentas-list .gerente-row[data-idx]").forEach(elx => {
-    elx.addEventListener("click", () => {
-      const item = porCuenta[Number(elx.dataset.idx)];
-      openCuentaBreakdownModal(item, catLabel + " › " + item.label, () => openCostoCategoriaModal(cat, rows, totalAmbasCategorias));
+  function renderContent(periodoFiltro) {
+    const { filtered, total, porCuenta, porEmpleado } = computeView(periodoFiltro);
+    const cuentasHtml = porCuenta.map((d, i) => `
+      <div class="gerente-row clickable" data-idx="${i}" title="Clic para ver el detalle de esta cuenta">
+        <span class="name">${escapeHtml(d.label)}</span>
+        <span class="pct">${fmtCOP(d.value)} · ${fmtPct(total ? d.value / total * 100 : 0, 0)}</span>
+      </div>`).join("");
+    const empHtml = porEmpleado.length ? `
+      <div class="section-title" style="font-size:12px;margin:14px 0 6px;">Personal involucrado</div>
+      <div class="gerente-list gerente-list-scroll">${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}</div>` : "";
+
+    document.getElementById(idPrefix + "-content").innerHTML = `
+      <div class="modal-kpis">
+        <div class="modal-kpi"><div class="l">Total</div><div class="v">${fmtCOP(total)}</div></div>
+        <div class="modal-kpi"><div class="l">% del total de costos</div><div class="v">${fmtPct(totalAmbasCategorias ? total / totalAmbasCategorias * 100 : 0)}</div></div>
+        <div class="modal-kpi"><div class="l"># Transacciones</div><div class="v">${filtered.length}</div></div>
+      </div>
+      <div class="section-title" style="font-size:12px;margin-bottom:6px;">Cuentas mayores incluidas <span class="text-faint" style="font-weight:500;text-transform:none;">· clic en una para ver su detalle</span></div>
+      <div class="gerente-list gerente-list-scroll" id="${idPrefix}-cuentas-list">${cuentasHtml || '<div class="text-faint" style="font-size:12px;">Sin cuentas para este filtro.</div>'}</div>
+      ${empHtml}
+      <div class="mt-8"></div>
+      ${miniTxTable(filtered, 80)}`;
+
+    document.querySelectorAll("#" + idPrefix + "-cuentas-list .gerente-row[data-idx]").forEach(elx => {
+      elx.addEventListener("click", () => {
+        const item = porCuenta[Number(elx.dataset.idx)];
+        openCuentaBreakdownModal(item, catLabel + " › " + item.label, () => openCostoCategoriaModal(cat, rows, totalAmbasCategorias));
+      });
     });
-  });
+  }
+
+  function getExportData(periodoFiltro) {
+    const { filtered, total, porCuenta } = computeView(periodoFiltro);
+    const periodoLabel = periodoFiltro ? periodoToLabel(Number(periodoFiltro)) : "Todos";
+    return {
+      title: catLabel + (periodoFiltro ? " — " + periodoLabel : ""),
+      sub: "Clasificación oficial del IBReport (campo Eri_est) · periodo: " + periodoLabel,
+      resumenPares: [["Total", fmtCOP(total)], ["% del total de costos", fmtPct(totalAmbasCategorias ? total / totalAmbasCategorias * 100 : 0)], ["Periodo", periodoLabel], ["Transacciones", String(filtered.length)]],
+      cuentasRows: porCuenta.map(c => ({ label: c.label, value: c.value, pct: total ? c.value / total * 100 : 0 })),
+      txRows: filtered,
+    };
+  }
+
+  openModal(catLabel, "Clasificación oficial del IBReport (campo Eri_est) · según los filtros activos",
+    modalExportBarHtml(idPrefix, rows) + `<div id="${idPrefix}-content"></div>`);
+  renderContent("");
+  wireModalExportBar(idPrefix, getExportData);
+  const sel = document.getElementById(idPrefix + "-periodo");
+  if (sel) sel.addEventListener("change", () => renderContent(sel.value));
 }
 
 function openMatrixCellModal(cuenta, periodo, matrix, periodos) {
+  const idPrefix = "modal-cell";
   const rows = getFilteredIBRows({ ignoreMes: true }).filter(r => !r.esIngreso && r.cuentaMayor === cuenta && r.periodo === periodo);
   const idx = periodos.indexOf(periodo);
   const prevPeriodo = idx > 0 ? periodos[idx - 1] : null;
@@ -166,17 +384,31 @@ function openMatrixCellModal(cuenta, periodo, matrix, periodos) {
   const prevVal = prevPeriodo !== null ? matrix[cuenta][prevPeriodo] : null;
   const variacion = (prevVal !== null && prevVal !== 0) ? ((currVal - prevVal) / Math.abs(prevVal)) * 100 : null;
   const porEmpleado = costoPorPersonal(rows).slice(0, 8);
+  const titleBase = cuenta;
+  const subBase = periodoToLabel(periodo) + " · detalle de la matriz de costos";
 
-  const body = `
-    <div class="modal-kpis">
-      <div class="modal-kpi"><div class="l">${periodoToLabel(periodo)}</div><div class="v">${fmtCOP(currVal)}</div></div>
-      <div class="modal-kpi"><div class="l">${prevPeriodo ? periodoToLabel(prevPeriodo) : "Mes anterior"}</div><div class="v">${prevVal !== null ? fmtCOP(prevVal) : "—"}</div></div>
-      <div class="modal-kpi"><div class="l">Variación</div><div class="v" style="color:${variacion === null ? "inherit" : (variacion >= 0 ? "var(--danger)" : "var(--success)")}">${variacion === null ? "—" : (variacion >= 0 ? "+" : "") + variacion.toFixed(1) + "%"}</div></div>
-    </div>
-    ${porEmpleado.length ? `<div class="section-title" style="font-size:12px;margin-bottom:6px;">Personal involucrado</div><div class="gerente-list">${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}</div>` : ""}
-    <div class="mt-8"></div>
-    ${miniTxTable(rows, 80)}`;
-  openModal(cuenta, periodoToLabel(periodo) + " · detalle de la matriz de costos", body);
+  function renderContent() {
+    document.getElementById(idPrefix + "-content").innerHTML = `
+      <div class="modal-kpis">
+        <div class="modal-kpi"><div class="l">${periodoToLabel(periodo)}</div><div class="v">${fmtCOP(currVal)}</div></div>
+        <div class="modal-kpi"><div class="l">${prevPeriodo ? periodoToLabel(prevPeriodo) : "Mes anterior"}</div><div class="v">${prevVal !== null ? fmtCOP(prevVal) : "—"}</div></div>
+        <div class="modal-kpi"><div class="l">Variación</div><div class="v" style="color:${variacion === null ? "inherit" : (variacion >= 0 ? "var(--danger)" : "var(--success)")}">${variacion === null ? "—" : (variacion >= 0 ? "+" : "") + variacion.toFixed(1) + "%"}</div></div>
+      </div>
+      ${porEmpleado.length ? `<div class="section-title" style="font-size:12px;margin-bottom:6px;">Personal involucrado</div><div class="gerente-list">${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}</div>` : ""}
+      <div class="mt-8"></div>
+      ${miniTxTable(rows, 80)}`;
+  }
+  function getExportData() {
+    return {
+      title: titleBase + " — " + periodoToLabel(periodo), sub: subBase,
+      resumenPares: [[periodoToLabel(periodo), fmtCOP(currVal)], [prevPeriodo ? periodoToLabel(prevPeriodo) : "Mes anterior", prevVal !== null ? fmtCOP(prevVal) : "—"], ["Variación", variacion === null ? "—" : (variacion >= 0 ? "+" : "") + variacion.toFixed(1) + "%"], ["Transacciones", String(rows.length)]],
+      cuentasRows: null, txRows: rows,
+    };
+  }
+
+  openModal(titleBase, subBase, modalExportBarHtml(idPrefix, rows, false) + `<div id="${idPrefix}-content"></div>`); // sin selector: ya esta acotado a un solo mes
+  renderContent();
+  wireModalExportBar(idPrefix, getExportData);
 }
 
 function openProjectModal(code, list) {
