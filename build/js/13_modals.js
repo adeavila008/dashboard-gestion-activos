@@ -75,32 +75,63 @@ function openMatrixExpandModal() {
 
 /* ---------- Exportacion de modales de detalle (Excel / PDF) ----------
    Todos los modales que muestran transacciones (miniTxTable) comparten esta
-   barra: un selector de PERIODO que filtra SOLO dentro del modal (sin tocar
-   los filtros globales del dashboard, para no perder el contexto al
-   cerrarlo) y 2 botones de descarga que exportan TODAS las transacciones del
-   contexto actual (cuenta / categoria / mes), no solo las 80 que se
-   muestran en pantalla -- y cuando el contexto abarca varias cuentas
-   mayores (ej. "Otros costos"), separadas por cuenta (una hoja/tabla por
-   cuenta) en vez de una sola tabla con todo mezclado. */
+   barra: un filtro de RANGO DE PERIODO ("Desde" - "Hasta", ej. 202503 a
+   202508) que filtra SOLO dentro del modal (sin tocar los filtros globales
+   del dashboard, para no perder el contexto al cerrarlo) y 2 botones de
+   descarga que exportan TODAS las transacciones del rango elegido (no solo
+   las 80 que se muestran en pantalla) -- y cuando el contexto abarca varias
+   cuentas mayores (ej. "Otros costos"), separadas por cuenta (una
+   hoja/tabla por cuenta) en vez de una sola tabla con todo mezclado. */
 
 function uniquePeriodos(rows) {
   return uniqueSorted(rows.map(r => r.periodo)).map(Number).sort((a, b) => a - b);
 }
 
+/** Filtra filas cuyo periodo cae DENTRO del rango [desde, hasta] (inclusive
+ * en ambos extremos). "desde"/"hasta" son strings de un <select> (o "" si no
+ * hay limite en ese extremo) -- asi se puede pedir "de 202503 a 202508" o
+ * dejar cualquiera de los dos lados abierto. */
+function filterByPeriodoRange(rows, desde, hasta) {
+  const d = desde ? Number(desde) : null;
+  const h = hasta ? Number(hasta) : null;
+  return rows.filter(r => (d === null || r.periodo >= d) && (h === null || r.periodo <= h));
+}
+function periodoRangeLabel(desde, hasta) {
+  if (!desde && !hasta) return "Todos";
+  if (desde && hasta) return desde === hasta ? String(desde) : desde + " a " + hasta;
+  return desde ? "Desde " + desde : "Hasta " + hasta;
+}
+
 function modalExportBarHtml(idPrefix, rows, showPeriodo) {
   const periodos = uniquePeriodos(rows);
-  const opts = '<option value="">Todos los periodos</option>' +
-    periodos.map(p => `<option value="${p}">${escapeHtml(String(p))}</option>`).join("");
-  const periodoHtml = showPeriodo === false ? "" :
-    `<div><span class="l">Periodo: </span><select class="modal-export-select" id="${idPrefix}-periodo">${opts}</select></div>`;
+  const opts = periodos.map(p => `<option value="${p}">${escapeHtml(String(p))}</option>`).join("");
+  const periodoHtml = showPeriodo === false ? "" : `
+    <div class="modal-export-range">
+      <span class="l">Periodo: </span>
+      <select class="modal-export-select" id="${idPrefix}-periodo-desde"><option value="">Desde (inicio)</option>${opts}</select>
+      <span class="l">a</span>
+      <select class="modal-export-select" id="${idPrefix}-periodo-hasta"><option value="">Hasta (fin)</option>${opts}</select>
+    </div>`;
   return `
     <div class="modal-export-bar">
       ${periodoHtml}
       <div class="modal-export-actions">
-        <button class="btn btn-ghost btn-sm" id="${idPrefix}-export-xlsx" title="Descargar Excel (todas las transacciones del contexto actual)">⬇ Excel</button>
+        <button class="btn btn-ghost btn-sm" id="${idPrefix}-export-xlsx" title="Descargar Excel (todas las transacciones del rango elegido)">⬇ Excel</button>
         <button class="btn btn-ghost btn-sm" id="${idPrefix}-export-pdf" title="Descargar PDF">⬇ PDF</button>
       </div>
     </div>`;
+}
+
+/** Engancha "Desde"/"Hasta" de la barra de exportacion para que, al
+ * cambiar cualquiera de los dos, se vuelva a llamar "renderContent(desde,
+ * hasta)" -- asi el rango tambien filtra lo que se VE en el modal, no solo
+ * lo que se descarga. */
+function wireModalPeriodoRange(idPrefix, renderContent) {
+  const selD = document.getElementById(idPrefix + "-periodo-desde");
+  const selH = document.getElementById(idPrefix + "-periodo-hasta");
+  const onChange = () => renderContent(selD ? selD.value : "", selH ? selH.value : "");
+  if (selD) selD.addEventListener("change", onChange);
+  if (selH) selH.addEventListener("change", onChange);
 }
 
 function slugFilename(s) {
@@ -220,21 +251,24 @@ function exportModalPDF(filenameBase, title, sub, resumenPares, cuentasRows, txR
 }
 
 /** Engancha los 2 botones de descarga de la barra de exportacion.
- * "getExportData(periodoFiltro)" debe devolver { title, sub, resumenPares,
- * cuentasRows, txRows } ya calculados para ese periodo (o para todos si
- * periodoFiltro es ""). El selector de periodo en si (para refrescar lo que
- * se VE en el modal) se engancha por fuera, en cada funcion openXxxModal. */
+ * "getExportData(desde, hasta)" debe devolver { title, sub, resumenPares,
+ * cuentasRows, txRows } ya calculados para ese rango de periodo (o para
+ * todos si ambos son ""). El rango en si (para refrescar lo que se VE en el
+ * modal) se engancha por fuera con wireModalPeriodoRange(). */
 function wireModalExportBar(idPrefix, getExportData) {
-  const sel = document.getElementById(idPrefix + "-periodo");
+  const selD = document.getElementById(idPrefix + "-periodo-desde");
+  const selH = document.getElementById(idPrefix + "-periodo-hasta");
   const btnXlsx = document.getElementById(idPrefix + "-export-xlsx");
   const btnPdf = document.getElementById(idPrefix + "-export-pdf");
-  const curPeriodo = () => (sel ? sel.value : "");
+  const curRange = () => [selD ? selD.value : "", selH ? selH.value : ""];
   if (btnXlsx) btnXlsx.addEventListener("click", () => {
-    const d = getExportData(curPeriodo());
+    const [desde, hasta] = curRange();
+    const d = getExportData(desde, hasta);
     exportModalExcel(slugFilename(d.title), d.title, d.resumenPares, d.cuentasRows, d.txRows);
   });
   if (btnPdf) btnPdf.addEventListener("click", () => {
-    const d = getExportData(curPeriodo());
+    const [desde, hasta] = curRange();
+    const d = getExportData(desde, hasta);
     exportModalPDF(slugFilename(d.title), d.title, d.sub, d.resumenPares, d.cuentasRows, d.txRows);
   });
 }
@@ -294,13 +328,13 @@ function openCuentaBreakdownModal(item, kindLabel, backFn) {
   const idPrefix = "modal-cuenta";
   const rows = item.rows;
 
-  function computeView(periodoFiltro) {
-    const filtered = periodoFiltro ? rows.filter(r => String(r.periodo) === String(periodoFiltro)) : rows;
+  function computeView(desde, hasta) {
+    const filtered = filterByPeriodoRange(rows, desde, hasta);
     return { filtered, total: sumBy(filtered, r => r.importe), porEmpleado: costoPorPersonal(filtered).slice(0, 8) };
   }
 
-  function renderContent(periodoFiltro) {
-    const { filtered, total, porEmpleado } = computeView(periodoFiltro);
+  function renderContent(desde, hasta) {
+    const { filtered, total, porEmpleado } = computeView(desde, hasta);
     const empHtml = porEmpleado.length ? `
       <div class="section-title" style="font-size:12px;margin:14px 0 6px;">Personal / terceros involucrados</div>
       <div class="gerente-list gerente-list-scroll">
@@ -319,37 +353,36 @@ function openCuentaBreakdownModal(item, kindLabel, backFn) {
     if (backFn) { const b = document.getElementById("modal-back-btn"); if (b) b.addEventListener("click", backFn); }
   }
 
-  function getExportData(periodoFiltro) {
-    const { filtered, total } = computeView(periodoFiltro);
-    const periodoLabel = periodoFiltro ? periodoToLabel(Number(periodoFiltro)) : "Todos";
+  function getExportData(desde, hasta) {
+    const { filtered, total } = computeView(desde, hasta);
+    const periodoLabel = periodoRangeLabel(desde, hasta);
     return {
-      title: item.label + (periodoFiltro ? " — " + periodoLabel : ""), sub: kindLabel + " · periodo: " + periodoLabel,
+      title: item.label + (periodoLabel !== "Todos" ? " — " + periodoLabel : ""), sub: kindLabel + " · periodo: " + periodoLabel,
       resumenPares: [["Total", fmtCOP(total)], ["Periodo", periodoLabel], ["Transacciones", String(filtered.length)]],
       cuentasRows: null, txRows: filtered,
     };
   }
 
   openModal(item.label, kindLabel, modalExportBarHtml(idPrefix, rows) + `<div id="${idPrefix}-content"></div>`);
-  renderContent("");
+  renderContent("", "");
   wireModalExportBar(idPrefix, getExportData);
-  const sel = document.getElementById(idPrefix + "-periodo");
-  if (sel) sel.addEventListener("change", () => renderContent(sel.value));
+  wireModalPeriodoRange(idPrefix, renderContent);
 }
 
 function openCostoCategoriaModal(cat, rows, totalAmbasCategorias) {
   const idPrefix = "modal-cat";
   const catLabel = cat === "directo" ? "Costos directos" : "Otros costos";
 
-  function computeView(periodoFiltro) {
-    const filtered = periodoFiltro ? rows.filter(r => String(r.periodo) === String(periodoFiltro)) : rows;
+  function computeView(desde, hasta) {
+    const filtered = filterByPeriodoRange(rows, desde, hasta);
     const total = sumBy(filtered, r => r.importe);
     const porCuenta = costosPorCuentaMayor(filtered);
     const porEmpleado = costoPorPersonal(filtered).slice(0, 8);
     return { filtered, total, porCuenta, porEmpleado };
   }
 
-  function renderContent(periodoFiltro) {
-    const { filtered, total, porCuenta, porEmpleado } = computeView(periodoFiltro);
+  function renderContent(desde, hasta) {
+    const { filtered, total, porCuenta, porEmpleado } = computeView(desde, hasta);
     const cuentasHtml = porCuenta.map((d, i) => `
       <div class="gerente-row clickable" data-idx="${i}" title="Clic para ver el detalle de esta cuenta">
         <span class="name">${escapeHtml(d.label)}</span>
@@ -379,11 +412,11 @@ function openCostoCategoriaModal(cat, rows, totalAmbasCategorias) {
     });
   }
 
-  function getExportData(periodoFiltro) {
-    const { filtered, total, porCuenta } = computeView(periodoFiltro);
-    const periodoLabel = periodoFiltro ? periodoToLabel(Number(periodoFiltro)) : "Todos";
+  function getExportData(desde, hasta) {
+    const { filtered, total, porCuenta } = computeView(desde, hasta);
+    const periodoLabel = periodoRangeLabel(desde, hasta);
     return {
-      title: catLabel + (periodoFiltro ? " — " + periodoLabel : ""),
+      title: catLabel + (periodoLabel !== "Todos" ? " — " + periodoLabel : ""),
       sub: "Clasificación oficial del IBReport (campo Eri_est) · periodo: " + periodoLabel,
       resumenPares: [["Total", fmtCOP(total)], ["% del total de costos", fmtPct(totalAmbasCategorias ? total / totalAmbasCategorias * 100 : 0)], ["Periodo", periodoLabel], ["Transacciones", String(filtered.length)]],
       cuentasRows: porCuenta.map(c => ({ label: c.label, value: c.value, pct: total ? c.value / total * 100 : 0, rows: c.rows })),
@@ -393,10 +426,9 @@ function openCostoCategoriaModal(cat, rows, totalAmbasCategorias) {
 
   openModal(catLabel, "Clasificación oficial del IBReport (campo Eri_est) · según los filtros activos",
     modalExportBarHtml(idPrefix, rows) + `<div id="${idPrefix}-content"></div>`);
-  renderContent("");
+  renderContent("", "");
   wireModalExportBar(idPrefix, getExportData);
-  const sel = document.getElementById(idPrefix + "-periodo");
-  if (sel) sel.addEventListener("change", () => renderContent(sel.value));
+  wireModalPeriodoRange(idPrefix, renderContent);
 }
 
 function openMatrixCellModal(cuenta, periodo, matrix, periodos) {

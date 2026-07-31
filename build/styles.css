@@ -270,6 +270,7 @@ input[type=file]{display:none;}
   padding:6px 26px 6px 10px;border-radius:100px;font-size:12px;font-weight:600;cursor:pointer;
 }
 .modal-export-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.modal-export-range{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
 .search-box input::placeholder{color:var(--text-faint);}
 
 /* ---------- grid / chart cards ---------- */
