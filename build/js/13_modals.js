@@ -159,6 +159,22 @@ function tieneGruposPorCuenta(cuentasRows) {
   return !!(cuentasRows && cuentasRows.length && cuentasRows.every(c => c.rows));
 }
 
+/** Resumen "Cuenta mayor x Periodo": misma cuenta mayor de la tabla de
+ * totales, pero AHORA dividido mes a mes -- para poder leer, ej., "en
+ * 202506 la cuenta Amortizaciones tuvo tal valor" en vez de solo el total
+ * acumulado de todo el rango. Mismo orden de cuentas que "Cuentas mayores
+ * incluidas" (de mayor a menor valor). */
+function buildCuentaPeriodoMatrix(cuentasRows) {
+  const periodos = uniqueSorted(cuentasRows.flatMap(c => c.rows.map(r => r.periodo))).map(Number).sort((a, b) => a - b);
+  const matrix = cuentasRows.map(c => {
+    const fila = {};
+    periodos.forEach(p => fila[p] = 0);
+    c.rows.forEach(r => { fila[r.periodo] = (fila[r.periodo] || 0) + r.importe; });
+    return { label: c.label, total: c.value, fila };
+  });
+  return { periodos, matrix };
+}
+
 /** Hoja "Resumen" (KPIs + periodo aplicado) + hoja "Cuentas mayores"
  * (totales) + una hoja POR CADA cuenta mayor con sus transacciones -- o, si
  * el contexto ya es de una sola cuenta, una unica hoja "Transacciones" con
@@ -175,7 +191,17 @@ function exportModalExcel(filenameBase, title, resumenPares, cuentasRows, txRows
     ]);
     XLSX.utils.book_append_sheet(wb, wsCuentas, "Cuentas mayores");
 
-    const usedNames = new Set(["Resumen", "Cuentas mayores"]);
+    // Mismo desglose, pero AHORA dividido por periodo (una columna por mes)
+    // -- para ver, ej., cuanto tuvo cada cuenta EN 202506 especificamente,
+    // no solo el total acumulado del rango completo.
+    const { periodos, matrix } = buildCuentaPeriodoMatrix(cuentasRows);
+    const wsResumenMensual = XLSX.utils.aoa_to_sheet([
+      ["Cuenta mayor", ...periodos.map(String), "Total"],
+      ...matrix.map(m => [m.label, ...periodos.map(p => m.fila[p] || 0), m.total]),
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsResumenMensual, "Resumen por periodo");
+
+    const usedNames = new Set(["Resumen", "Cuentas mayores", "Resumen por periodo"]);
     cuentasRows.forEach(c => {
       const base = (c.label || "Cuenta").substring(0, 31) || "Cuenta";
       let name = base, i = 2;
@@ -218,6 +244,21 @@ function exportModalPDF(filenameBase, title, sub, resumenPares, cuentasRows, txR
       head: [["Cuenta mayor", "Valor", "%"]],
       body: cuentasRows.map(c => [c.label, fmtCOP(c.value), c.pct != null ? c.pct.toFixed(1) + "%" : "—"]),
       theme: "striped", styles: { fontSize: 8.5, cellPadding: 5 }, headStyles: { fillColor: [139, 143, 245], textColor: 255 },
+    });
+    y = doc.lastAutoTable.finalY + 22;
+
+    // Mismo desglose, pero dividido por periodo (una columna por mes) --
+    // para leer directo, ej., "en 202506 la cuenta X tuvo tal valor" sin
+    // tener que abrir la tabla completa de transacciones de esa cuenta.
+    const { periodos, matrix } = buildCuentaPeriodoMatrix(cuentasRows);
+    if (y > 650) { doc.addPage(); y = 40; }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    doc.text("Resumen mensual por cuenta mayor", margin, y); y += 8;
+    doc.autoTable({
+      startY: y, margin: { left: margin, right: margin },
+      head: [["Cuenta mayor", ...periodos.map(String), "Total"]],
+      body: matrix.map(m => [m.label, ...periodos.map(p => fmtCompact(m.fila[p] || 0)), fmtCOP(m.total)]),
+      theme: "grid", styles: { fontSize: 6.5, cellPadding: 2.5 }, headStyles: { fillColor: [240, 166, 58], textColor: 20, fontSize: 6.5 },
     });
     y = doc.lastAutoTable.finalY + 22;
 
