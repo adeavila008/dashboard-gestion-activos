@@ -83,16 +83,27 @@ async function generateExecutiveReport(anios, proyectos) {
     const personal = costoPorPersonal(rows).slice(0, 12);
     const proyectosAgg = getProjectAggregates().filter(p => !proyectos.length || proyectos.includes(p.codigo));
 
+    // Etiqueta de datos clara/oscura (fondo blanco del PDF, no el tema
+    // oscuro del dashboard) sobre cada barra -- se omiten los meses en $0
+    // para no saturar la grafica con etiquetas "0" repetidas.
+    const reportDatalabel = extra => Object.assign({
+      display: ctx => _dlMeaningful(ctx.dataset.data[ctx.dataIndex]),
+      anchor: "end", align: "end", offset: 2,
+      color: "#334155", font: { size: 8, weight: "700" },
+      formatter: v => fmtCompact(v),
+    }, extra || {});
+
     const chartImg = await offscreenChartImage({
       type: "bar",
       data: {
         labels: serie.map(s => periodoToLabel(s.periodo)),
         datasets: [
-          { label: "Ingresos", data: serie.map(s => s.ingresos), backgroundColor: PALETTE.secondary, borderRadius: 4 },
-          { label: "Costos", data: serie.map(s => s.costos), backgroundColor: PALETTE.danger, borderRadius: 4 },
+          { label: "Ingresos", data: serie.map(s => s.ingresos), backgroundColor: PALETTE.secondary, borderRadius: 4, datalabels: reportDatalabel() },
+          { label: "Costos", data: serie.map(s => s.costos), backgroundColor: PALETTE.danger, borderRadius: 4, datalabels: reportDatalabel() },
         ],
       },
       options: {
+        layout: { padding: { top: 18 } },
         plugins: { legend: { position: "top", labels: { color: "#334", font: { size: 12 } } } },
         scales: {
           y: { ticks: { color: "#334", callback: v => fmtCompact(v) }, grid: { color: "#e5e7eb" } },
