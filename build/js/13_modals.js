@@ -73,13 +73,15 @@ function openMatrixExpandModal() {
   });
 }
 
-/* ---------- Exportacion de modales de detalle (Excel / PDF / Imagen) ----------
+/* ---------- Exportacion de modales de detalle (Excel / PDF) ----------
    Todos los modales que muestran transacciones (miniTxTable) comparten esta
    barra: un selector de PERIODO que filtra SOLO dentro del modal (sin tocar
    los filtros globales del dashboard, para no perder el contexto al
-   cerrarlo) y 3 botones de descarga que exportan TODAS las transacciones del
+   cerrarlo) y 2 botones de descarga que exportan TODAS las transacciones del
    contexto actual (cuenta / categoria / mes), no solo las 80 que se
-   muestran en pantalla. */
+   muestran en pantalla -- y cuando el contexto abarca varias cuentas
+   mayores (ej. "Otros costos"), separadas por cuenta (una hoja/tabla por
+   cuenta) en vez de una sola tabla con todo mezclado. */
 
 function uniquePeriodos(rows) {
   return uniqueSorted(rows.map(r => r.periodo)).map(Number).sort((a, b) => a - b);
@@ -88,7 +90,7 @@ function uniquePeriodos(rows) {
 function modalExportBarHtml(idPrefix, rows, showPeriodo) {
   const periodos = uniquePeriodos(rows);
   const opts = '<option value="">Todos los periodos</option>' +
-    periodos.map(p => `<option value="${p}">${escapeHtml(periodoToLabel(p))}</option>`).join("");
+    periodos.map(p => `<option value="${p}">${escapeHtml(String(p))}</option>`).join("");
   const periodoHtml = showPeriodo === false ? "" :
     `<div><span class="l">Periodo: </span><select class="modal-export-select" id="${idPrefix}-periodo">${opts}</select></div>`;
   return `
@@ -97,17 +99,8 @@ function modalExportBarHtml(idPrefix, rows, showPeriodo) {
       <div class="modal-export-actions">
         <button class="btn btn-ghost btn-sm" id="${idPrefix}-export-xlsx" title="Descargar Excel (todas las transacciones del contexto actual)">⬇ Excel</button>
         <button class="btn btn-ghost btn-sm" id="${idPrefix}-export-pdf" title="Descargar PDF">⬇ PDF</button>
-        <button class="btn btn-ghost btn-sm" id="${idPrefix}-export-img" title="Descargar imagen">⬇ Imagen</button>
       </div>
     </div>`;
-}
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 250);
 }
 
 function slugFilename(s) {
@@ -116,30 +109,52 @@ function slugFilename(s) {
     .replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase()) || "detalle";
 }
 
-/** Hoja "Resumen" (KPIs + periodo aplicado) + hoja opcional "Cuentas
- * mayores" + hoja "Transacciones" con TODAS las filas (no solo las 80
- * mostradas en el modal). */
-function exportModalExcel(filenameBase, title, resumenPares, cuentasRows, txRows) {
-  const wb = XLSX.utils.book_new();
-  const wsResumen = XLSX.utils.aoa_to_sheet([[title], [], ...resumenPares]);
-  XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
-  if (cuentasRows && cuentasRows.length) {
-    const wsCuentas = XLSX.utils.aoa_to_sheet([
-      ["Cuenta mayor", "Valor", "% del total"],
-      ...cuentasRows.map(c => [c.label, c.value, c.pct != null ? c.pct.toFixed(1) + "%" : ""]),
-    ]);
-    XLSX.utils.book_append_sheet(wb, wsCuentas, "Cuentas mayores");
-  }
-  const wsTx = XLSX.utils.json_to_sheet(txRows.map(r => ({
-    Fecha: r.fecha ? fmtDate(r.fecha) : "",
-    Periodo: r.periodo != null ? periodoToLabel(r.periodo) : "",
+function txToRecord(r) {
+  return {
+    Periodo: r.periodo != null ? String(r.periodo) : "",
     "Cuenta mayor": r.cuentaMayor || "",
     Descripcion: r.descripcion || "",
     Tercero: r.tercero || "",
     Empleado: r.empleado || "",
     Importe: r.importe,
-  })));
-  XLSX.utils.book_append_sheet(wb, wsTx, "Transacciones");
+  };
+}
+
+/** true si "cuentasRows" viene con el desglose de transacciones por cuenta
+ * (c.rows) -- en ese caso el export se organiza POR CUENTA MAYOR (una hoja
+ * de Excel / una tabla de PDF por cuenta) en vez de una tabla plana con
+ * todas las cuentas mezcladas. */
+function tieneGruposPorCuenta(cuentasRows) {
+  return !!(cuentasRows && cuentasRows.length && cuentasRows.every(c => c.rows));
+}
+
+/** Hoja "Resumen" (KPIs + periodo aplicado) + hoja "Cuentas mayores"
+ * (totales) + una hoja POR CADA cuenta mayor con sus transacciones -- o, si
+ * el contexto ya es de una sola cuenta, una unica hoja "Transacciones" con
+ * TODAS las filas (no solo las 80 mostradas en el modal). */
+function exportModalExcel(filenameBase, title, resumenPares, cuentasRows, txRows) {
+  const wb = XLSX.utils.book_new();
+  const wsResumen = XLSX.utils.aoa_to_sheet([[title], [], ...resumenPares]);
+  XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
+
+  if (tieneGruposPorCuenta(cuentasRows)) {
+    const wsCuentas = XLSX.utils.aoa_to_sheet([
+      ["Cuenta mayor", "Valor", "% del total"],
+      ...cuentasRows.map(c => [c.label, c.value, c.pct != null ? c.pct.toFixed(1) + "%" : ""]),
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsCuentas, "Cuentas mayores");
+
+    const usedNames = new Set(["Resumen", "Cuentas mayores"]);
+    cuentasRows.forEach(c => {
+      const base = (c.label || "Cuenta").substring(0, 31) || "Cuenta";
+      let name = base, i = 2;
+      while (usedNames.has(name)) { name = (base.substring(0, 27) + "_" + i).substring(0, 31); i++; }
+      usedNames.add(name);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(c.rows.map(txToRecord)), name);
+    });
+  } else {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(txRows.map(txToRecord)), "Transacciones");
+  }
   XLSX.writeFile(wb, filenameBase + ".xlsx");
 }
 
@@ -163,7 +178,8 @@ function exportModalPDF(filenameBase, title, sub, resumenPares, cuentasRows, txR
     theme: "grid", styles: { fontSize: 9, cellPadding: 5 }, headStyles: { fillColor: [240, 166, 58], textColor: 20 },
   });
   y = doc.lastAutoTable.finalY + 18;
-  if (cuentasRows && cuentasRows.length) {
+
+  if (tieneGruposPorCuenta(cuentasRows)) {
     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
     doc.text("Cuentas mayores incluidas", margin, y); y += 8;
     doc.autoTable({
@@ -172,33 +188,38 @@ function exportModalPDF(filenameBase, title, sub, resumenPares, cuentasRows, txR
       body: cuentasRows.map(c => [c.label, fmtCOP(c.value), c.pct != null ? c.pct.toFixed(1) + "%" : "—"]),
       theme: "striped", styles: { fontSize: 8.5, cellPadding: 5 }, headStyles: { fillColor: [139, 143, 245], textColor: 255 },
     });
-    y = doc.lastAutoTable.finalY + 18;
+    y = doc.lastAutoTable.finalY + 22;
+
+    // Una tabla POR CADA cuenta mayor (en vez de una sola tabla con todas
+    // las transacciones mezcladas) -- se lee mucho mejor: "SERVICIOS" y su
+    // tabla, luego "SEGUROS" y su tabla, y asi con cada cuenta.
+    cuentasRows.forEach(c => {
+      if (y > 700) { doc.addPage(); y = 40; }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+      doc.text(c.label + " (" + c.rows.length + ")", margin, y); y += 8;
+      doc.autoTable({
+        startY: y, margin: { left: margin, right: margin },
+        head: [["Periodo", "Descripción", "Tercero", "Empleado", "Importe"]],
+        body: c.rows.map(r => [r.periodo != null ? String(r.periodo) : "—", r.descripcion || "—", r.tercero || "—", r.empleado || "—", fmtCOP(r.importe)]),
+        theme: "grid", styles: { fontSize: 7, cellPadding: 3 }, headStyles: { fillColor: [52, 195, 217], textColor: 20 },
+      });
+      y = doc.lastAutoTable.finalY + 22;
+    });
+  } else {
+    if (y > 680) { doc.addPage(); y = 40; }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    doc.text("Transacciones (" + txRows.length + ")", margin, y); y += 8;
+    doc.autoTable({
+      startY: y, margin: { left: margin, right: margin },
+      head: [["Periodo", "Cuenta mayor", "Descripción", "Tercero", "Empleado", "Importe"]],
+      body: txRows.map(r => [r.periodo != null ? String(r.periodo) : "—", r.cuentaMayor || "—", r.descripcion || "—", r.tercero || "—", r.empleado || "—", fmtCOP(r.importe)]),
+      theme: "grid", styles: { fontSize: 7, cellPadding: 3 }, headStyles: { fillColor: [52, 195, 217], textColor: 20 },
+    });
   }
-  if (y > 680) { doc.addPage(); y = 40; }
-  doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-  doc.text("Transacciones (" + txRows.length + ")", margin, y); y += 8;
-  doc.autoTable({
-    startY: y, margin: { left: margin, right: margin },
-    head: [["Fecha", "Periodo", "Cuenta mayor", "Descripción", "Tercero", "Empleado", "Importe"]],
-    body: txRows.map(r => [
-      r.fecha ? fmtDate(r.fecha) : "—", r.periodo != null ? periodoToLabel(r.periodo) : "—",
-      r.cuentaMayor || "—", r.descripcion || "—", r.tercero || "—", r.empleado || "—", fmtCOP(r.importe),
-    ]),
-    theme: "grid", styles: { fontSize: 7, cellPadding: 3 }, headStyles: { fillColor: [52, 195, 217], textColor: 20 },
-  });
   doc.save(filenameBase + ".pdf");
 }
 
-function exportModalImage(filenameBase) {
-  if (typeof html2canvas === "undefined") { showToast("Imagen", "La librería de imagen aún está cargando, intenta de nuevo en un momento.", "warning"); return; }
-  const el = document.getElementById("modal-body");
-  if (!el) return;
-  html2canvas(el, { backgroundColor: "#0b1220", scale: 2, useCORS: true }).then(canvas => {
-    canvas.toBlob(blob => { if (blob) downloadBlob(blob, filenameBase + ".png"); });
-  }).catch(() => showToast("Imagen", "No se pudo generar la imagen.", "warning"));
-}
-
-/** Engancha los 3 botones de descarga de la barra de exportacion.
+/** Engancha los 2 botones de descarga de la barra de exportacion.
  * "getExportData(periodoFiltro)" debe devolver { title, sub, resumenPares,
  * cuentasRows, txRows } ya calculados para ese periodo (o para todos si
  * periodoFiltro es ""). El selector de periodo en si (para refrescar lo que
@@ -207,7 +228,6 @@ function wireModalExportBar(idPrefix, getExportData) {
   const sel = document.getElementById(idPrefix + "-periodo");
   const btnXlsx = document.getElementById(idPrefix + "-export-xlsx");
   const btnPdf = document.getElementById(idPrefix + "-export-pdf");
-  const btnImg = document.getElementById(idPrefix + "-export-img");
   const curPeriodo = () => (sel ? sel.value : "");
   if (btnXlsx) btnXlsx.addEventListener("click", () => {
     const d = getExportData(curPeriodo());
@@ -217,7 +237,6 @@ function wireModalExportBar(idPrefix, getExportData) {
     const d = getExportData(curPeriodo());
     exportModalPDF(slugFilename(d.title), d.title, d.sub, d.resumenPares, d.cuentasRows, d.txRows);
   });
-  if (btnImg) btnImg.addEventListener("click", () => exportModalImage(slugFilename(getExportData(curPeriodo()).title)));
 }
 
 function miniTxTable(rows, limit) {
@@ -225,14 +244,14 @@ function miniTxTable(rows, limit) {
   const shown = sorted.slice(0, limit || 60);
   const rowsHtml = shown.map(r => `
     <tr>
-      <td>${fmtDate(r.fecha)}</td>
+      <td>${r.periodo != null ? escapeHtml(String(r.periodo)) : "—"}</td>
       <td class="cell-wrap">${escapeHtml(r.descripcion || "—")}</td>
       <td class="cell-wrap">${escapeHtml(r.tercero || "—")}</td>
       <td>${escapeHtml(r.empleado || "—")}</td>
       <td class="num" style="color:${r.esIngreso ? "var(--secondary)" : "var(--text)"}">${fmtCOP(r.importe)}</td>
     </tr>`).join("");
   const more = sorted.length > shown.length ? `<div class="text-faint" style="font-size:11px;margin-top:8px;">Mostrando ${shown.length} de ${sorted.length} transacciones (ordenadas por valor absoluto).</div>` : "";
-  return `<div class="table-wrap table-wrap-scroll-modal"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Tercero</th><th>Empleado</th><th class="num">Importe</th></tr></thead><tbody>${rowsHtml || '<tr><td colspan="5" style="padding:14px;color:var(--text-faint);">Sin transacciones.</td></tr>'}</tbody></table></div>${more}`;
+  return `<div class="table-wrap table-wrap-scroll-modal"><table><thead><tr><th>Periodo</th><th>Descripción</th><th>Tercero</th><th>Empleado</th><th class="num">Importe</th></tr></thead><tbody>${rowsHtml || '<tr><td colspan="5" style="padding:14px;color:var(--text-faint);">Sin transacciones.</td></tr>'}</tbody></table></div>${more}`;
 }
 
 function openMonthDetailModal(periodo) {
@@ -253,10 +272,15 @@ function openMonthDetailModal(periodo) {
   }
   function getExportData() {
     const filtered = rows;
+    // El mes mezcla varias cuentas mayores (ingresos + costos): se agrupan
+    // igual que en "Otros costos" para que el export quede una tabla por
+    // cuenta, no todo mezclado.
+    const porCuenta = porCuentaMayorTodo(filtered);
     return {
       title: titleBase, sub: kpi.count + " transacciones en el mes",
       resumenPares: [["Ingresos", fmtCOP(kpi.ingresos)], ["Costos", fmtCOP(kpi.costos)], ["Margen", fmtCOP(kpi.margen)], ["Margen %", fmtPct(kpi.margenPct)], ["Transacciones", String(filtered.length)]],
-      cuentasRows: null, txRows: filtered,
+      cuentasRows: porCuenta.map(c => ({ label: c.label, value: c.value, pct: null, rows: c.rows })),
+      txRows: filtered,
     };
   }
 
@@ -362,7 +386,7 @@ function openCostoCategoriaModal(cat, rows, totalAmbasCategorias) {
       title: catLabel + (periodoFiltro ? " — " + periodoLabel : ""),
       sub: "Clasificación oficial del IBReport (campo Eri_est) · periodo: " + periodoLabel,
       resumenPares: [["Total", fmtCOP(total)], ["% del total de costos", fmtPct(totalAmbasCategorias ? total / totalAmbasCategorias * 100 : 0)], ["Periodo", periodoLabel], ["Transacciones", String(filtered.length)]],
-      cuentasRows: porCuenta.map(c => ({ label: c.label, value: c.value, pct: total ? c.value / total * 100 : 0 })),
+      cuentasRows: porCuenta.map(c => ({ label: c.label, value: c.value, pct: total ? c.value / total * 100 : 0, rows: c.rows })),
       txRows: filtered,
     };
   }

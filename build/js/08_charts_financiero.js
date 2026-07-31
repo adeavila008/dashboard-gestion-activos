@@ -14,6 +14,14 @@ function costosPorCuentaMayor(rows) {
   return Array.from(m.entries()).map(([k, rs]) => ({ label: k, value: sumBy(rs, r => r.importe), rows: rs }))
     .sort((a, b) => b.value - a.value);
 }
+/** Igual que costosPorCuentaMayor pero SIN filtrar por ingreso/costo -- para
+ * contextos que mezclan ambos (ej. el detalle de un mes completo), donde
+ * tambien se quiere separar el export por cuenta mayor. */
+function porCuentaMayorTodo(rows) {
+  const m = groupBy(rows, r => r.cuentaMayor || "Sin clasificar");
+  return Array.from(m.entries()).map(([k, rs]) => ({ label: k, value: sumBy(rs, r => r.importe), rows: rs }))
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+}
 function costoPorPersonal(rows) {
   const m = groupBy(rows.filter(r => !r.esIngreso && r.empleado), r => r.empleado);
   return Array.from(m.entries()).map(([k, rs]) => ({ label: k, value: sumBy(rs, r => r.importe), rows: rs }))
