@@ -245,6 +245,15 @@ function renderWipMensualChart(row) {
         {
           label: "WIP mes (sin ajuste)", data: hist.map(h => h.wipMes), borderColor: colorWithAlpha(PALETTE.violet, .5),
           backgroundColor: "transparent", borderDash: [4, 3], tension: .3, pointRadius: 0, borderWidth: 1.5, order: 3,
+          datalabels: {
+            display: ctx => { const a = hist[ctx.dataIndex] && hist[ctx.dataIndex].ajustes; return typeof a === "number" && a !== 0; },
+            formatter: (v, ctx) => { const a = hist[ctx.dataIndex].ajustes; return (a > 0 ? "Ajuste +" : "Ajuste ") + fmtCompact(a); },
+            anchor: "end", align: "bottom", offset: 18,
+            color: colorWithAlpha(PALETTE.warning, .95),
+            backgroundColor: colorWithAlpha("#0b1220", .16),
+            borderRadius: 4, padding: { top: 2, bottom: 2, left: 5, right: 5 },
+            font: { size: 9.5, weight: "600" },
+          },
         },
       ],
     },
@@ -268,7 +277,7 @@ function renderWipHistoricoTable(row) {
   const tbody = document.querySelector("#tbl-wip-historico tbody");
   if (!tbody) return;
   if (!row || !row.historico.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="padding:14px;color:var(--text-faint);">Selecciona un proyecto con datos de WIP.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="padding:14px;color:var(--text-faint);">Selecciona un proyecto con datos de WIP.</td></tr>';
     return;
   }
   const hist = [...row.historico].reverse();
@@ -277,6 +286,7 @@ function renderWipHistoricoTable(row) {
       <td>${mesToPeriodoLabel(h.mes)} ${h.semanas && h.semanas.length ? '<span class="text-faint" style="font-size:11px;">(semanal ⌄)</span>' : ""}</td>
       <td class="num">${fmtCOP(h.saldoWip)}</td>
       <td class="num">${fmtCOP(h.wipMesAjustes ?? h.wipMes)}</td>
+      <td class="num">${typeof h.ajustes === "number" && h.ajustes !== 0 ? (h.ajustes > 0 ? "+" : "") + fmtCOP(h.ajustes) : "—"}</td>
       <td class="num">${fmtCOP(h.facturacionRealMes)}</td>
       <td class="num">${fmtCOP(h.facturacionRealAcum)}</td>
       <td class="num">${fmtCOP(h.pendienteFacturarReal)}</td>
