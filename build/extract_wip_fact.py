@@ -33,9 +33,14 @@ import math
 import os
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
-from pyxlsb import open_workbook
+from pyxlsb import open_workbook as _open_workbook_xlsb
+
+try:
+    from openpyxl import load_workbook as _load_workbook_xlsx
+except ImportError:
+    _load_workbook_xlsx = None
 
 BUILD_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(BUILD_DIR, "data")
@@ -110,6 +115,77 @@ def excel_serial_to_iso(v, with_day=True):
 def is_date_serial(v):
     # Fechas reales en nuestro rango (2020-2035) caen entre ~43000 y ~50000.
     return isinstance(v, (int, float)) and 40000 < v < 60000
+
+
+def _datetime_to_excel_serial(v):
+    """openpyxl (a diferencia de pyxlsb) convierte automaticamente las celdas
+    con formato de fecha a objetos date/datetime de Python en vez de dejarlas
+    como el numero serial crudo. Todo el resto de este script (is_date_serial,
+    excel_serial_to_iso) espera SIEMPRE un serial numerico -- asi que se
+    normaliza aqui mismo, al leer la celda, para no tener que tocar nada mas
+    del pipeline segun el archivo venga en .xlsb o en .xlsx."""
+    if isinstance(v, datetime):
+        delta = v - datetime(1899, 12, 30)
+        return delta.days + delta.seconds / 86400.0
+    if isinstance(v, date):
+        return float((v - date(1899, 12, 30)).days)
+    return v
+
+
+class _XlsxCellShim:
+    __slots__ = ("v",)
+
+    def __init__(self, value):
+        self.v = _datetime_to_excel_serial(value)
+
+
+class _XlsxSheetShim:
+    def __init__(self, ws):
+        self._ws = ws
+
+    def rows(self):
+        for row in self._ws.iter_rows():
+            yield [_XlsxCellShim(c.value) for c in row]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _XlsxWorkbookShim:
+    """Misma interfaz minima que usa este script de pyxlsb.Workbook
+    (.sheets / .get_sheet(name) / .rows() con celdas .v), pero respaldada por
+    openpyxl -- para poder leer los archivos de Facturacion (o WIP) que el
+    usuario guarde como .xlsx en vez de .xlsb."""
+
+    def __init__(self, path):
+        self._wb = _load_workbook_xlsx(path, data_only=True, read_only=True)
+        self.sheets = list(self._wb.sheetnames)
+
+    def get_sheet(self, name):
+        return _XlsxSheetShim(self._wb[name])
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self._wb.close()
+        return False
+
+
+def open_workbook(path):
+    """Dispatcher por extension: .xlsb -> pyxlsb (formato binario nativo),
+    cualquier otra cosa (.xlsx/.xlsm) -> openpyxl. Asi extract_wip()/
+    extract_facturacion() no necesitan saber que libreria se uso."""
+    if path.lower().endswith(".xlsb"):
+        return _open_workbook_xlsb(path)
+    if _load_workbook_xlsx is None:
+        raise RuntimeError(
+            f"'{path}' no es un .xlsb y openpyxl no esta instalado para leerlo como .xlsx."
+        )
+    return _XlsxWorkbookShim(path)
 
 
 WEEK_LABELS = {"S1", "S2", "S3", "S4", "S5"}
@@ -282,10 +358,31 @@ FACT_SUMMARY_COLS = [
 ]
 
 
+def _find_fact_sheet_rows(wb):
+    """Ubica la hoja de Facturacion por contenido, no por nombre fijo:
+    algunos archivos siguen usando la hoja clasica 'GP-F08', pero otros
+    (guardados como .xlsx) traen todo en una sola hoja con otro nombre
+    (ej. 'Gestion de Activos'). Se prueba 'GP-F08' primero por compatibilidad
+    con los archivos .xlsb de siempre, y si no existe (o no tiene la seccion
+    INGRESOS esperada) se recorren todas las demas hojas del libro buscando
+    la que sí tenga la etiqueta 'INGRESOS' en la columna B."""
+    nombres = ([n for n in wb.sheets if n == "GP-F08"] +
+               [n for n in wb.sheets if n != "GP-F08"])
+    for nombre in nombres:
+        with wb.get_sheet(nombre) as ws:
+            rows = _sheet_rows(ws)
+        for r in rows:
+            if len(r) > 1 and r[1] == "INGRESOS":
+                return nombre, rows
+    raise ValueError(
+        "No se encontro ninguna hoja con la seccion 'INGRESOS' esperada "
+        "(se probaron: " + ", ".join(wb.sheets) + ")."
+    )
+
+
 def extract_facturacion(path):
     with open_workbook(path) as wb:
-        with wb.get_sheet("GP-F08") as ws:
-            rows = _sheet_rows(ws)
+        _sheet_name, rows = _find_fact_sheet_rows(wb)
 
     meta_row = None
     for r in rows[:10]:
