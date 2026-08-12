@@ -7,12 +7,30 @@ function buildCostMatrix(rows) {
   const cuentas = uniqueSorted(costRows.map(r => r.cuentaMayor));
   const periodos = uniqueSorted(costRows.map(r => r.periodo)).map(Number).sort((a, b) => a - b);
 
-  const matrix = {}; // cuenta -> periodo -> value
+  const matrix = {}; // cuentaMayor -> periodo -> value
   const catCount = {}; // cuenta -> conteo de transacciones por categoria (directo/otro)
   cuentas.forEach(c => { matrix[c] = {}; periodos.forEach(p => matrix[c][p] = 0); catCount[c] = { directo: 0, otro: 0 }; });
   costRows.forEach(r => {
     matrix[r.cuentaMayor][r.periodo] = (matrix[r.cuentaMayor][r.periodo] || 0) + r.importe;
     catCount[r.cuentaMayor][costoCategoria(r)]++;
+  });
+
+  // Desglose por sub-cuenta ("cuenta", ej. SUELDOS/CESANTIAS dentro de la
+  // cuenta mayor GASTOS DE PERSONAL) -- igual al "+" de la tabla dinamica de
+  // Excel del usuario. Solo tiene sentido mostrarlo cuando una cuenta mayor
+  // agrupa mas de una sub-cuenta; si solo tiene una, repetir la misma fila no
+  // aporta nada.
+  const subCuentasPorMayor = {}; // cuentaMayor -> [subcuentas] (solo si hay >1)
+  const subMatrix = {};          // cuentaMayor -> subcuenta -> periodo -> value
+  cuentas.forEach(c => { subMatrix[c] = {}; });
+  costRows.forEach(r => {
+    const cm = r.cuentaMayor, sc = r.cuenta;
+    if (!subMatrix[cm][sc]) { subMatrix[cm][sc] = {}; periodos.forEach(p => subMatrix[cm][sc][p] = 0); }
+    subMatrix[cm][sc][r.periodo] = (subMatrix[cm][sc][r.periodo] || 0) + r.importe;
+  });
+  cuentas.forEach(cm => {
+    const subs = uniqueSorted(costRows.filter(r => r.cuentaMayor === cm).map(r => r.cuenta));
+    if (subs.length > 1) subCuentasPorMayor[cm] = subs;
   });
   // Categoria oficial de cada cuenta mayor (para agrupar la matriz igual que
   // la tabla dinamica de Excel: "02 Costos Directos" / "03 Otros Costos").
@@ -48,7 +66,7 @@ function buildCostMatrix(rows) {
   });
   anomalyList.sort((a, b) => Math.abs(b.value) - Math.abs(a.value) || b.periodo - a.periodo);
 
-  return { cuentas, periodos, matrix, anomalies, anomalyList, categoriaPorCuenta };
+  return { cuentas, periodos, matrix, anomalies, anomalyList, categoriaPorCuenta, subCuentasPorMayor, subMatrix };
 }
 
 /** Grupos de la matriz, en el mismo orden/nombre que la clasificacion
@@ -59,20 +77,17 @@ const MATRIX_GRUPOS = [
   { key: "otro", label: "03 Otros Costos" },
 ];
 
-function renderMatrix(rows) {
-  const { cuentas, periodos, matrix, anomalies, categoriaPorCuenta } = buildCostMatrix(rows);
-  const thead = document.querySelector("#tbl-matrix thead");
-  const tbody = document.querySelector("#tbl-matrix tbody");
-
-  if (!cuentas.length) {
-    thead.innerHTML = "";
-    tbody.innerHTML = '<tr><td style="padding:20px;color:var(--text-faint);">Sin datos de costos para los filtros actuales.</td></tr>';
-    return;
-  }
-
-  thead.innerHTML = "<tr><th class='rowhead'>Cuenta mayor</th>" + periodos.map(p => `<th class="num">${periodoToLabel(p)}</th>`).join("") + "<th class='num'>Total</th></tr>";
-
+/** Construye las filas HTML de la matriz (cuenta mayor + sub-cuentas
+ * colapsables debajo, igual al "+" de la tabla dinamica de Excel). Se separa
+ * en su propia funcion para poder reutilizarla tanto en la tarjeta normal
+ * como en el modal de "Ampliar" (openMatrixExpandModal), que antes solo
+ * clonaba el HTML ya renderizado -- eso funcionaba para el nivel de cuenta
+ * mayor, pero el estado de los toggles (abierto/cerrado) y el data-* de las
+ * sub-filas hay que reconstruirlo igual en ambos lados. */
+function buildMatrixRowsHtml(built) {
+  const { cuentas, periodos, matrix, anomalies, categoriaPorCuenta, subCuentasPorMayor, subMatrix } = built;
   const bodyRows = [];
+  let groupSeq = 0;
   MATRIX_GRUPOS.forEach(g => {
     const cuentasGrupo = cuentas.filter(c => categoriaPorCuenta[c] === g.key);
     if (!cuentasGrupo.length) return;
@@ -87,21 +102,78 @@ function renderMatrix(rows) {
 
     // Cuentas mayores de ese grupo, indentadas debajo (igual que el "+" de la tabla dinamica).
     cuentasGrupo.forEach(c => {
+      const subs = subCuentasPorMayor[c]; // solo definido si hay mas de 1 sub-cuenta
+      const gid = "g" + (groupSeq++);
       const rowTotal = periodos.reduce((s, p) => s + matrix[c][p], 0);
       const cells = periodos.map(p => {
         const v = matrix[c][p];
         const isAnom = anomalies.has(c + "|" + p);
         return `<td class="mval${isAnom ? " anomaly" : ""}" data-cuenta="${escapeHtml(c)}" data-periodo="${p}">${v ? fmtCompact(v) : "—"}</td>`;
       }).join("");
-      bodyRows.push(`<tr><th class="rowhead rowhead-indent">${escapeHtml(c)}</th>${cells}<td class="num" style="font-weight:700;">${fmtCompact(rowTotal)}</td></tr>`);
+      const toggleHtml = subs ? `<span class="matrix-toggle" data-toggle="${gid}">▸</span>` : `<span class="matrix-toggle-spacer"></span>`;
+      bodyRows.push(`<tr><th class="rowhead rowhead-indent">${toggleHtml}${escapeHtml(c)}</th>${cells}<td class="num" style="font-weight:700;">${fmtCompact(rowTotal)}</td></tr>`);
+
+      // Sub-cuentas (ej. SUELDOS, CESANTIAS... dentro de GASTOS DE PERSONAL) --
+      // colapsadas por defecto, se muestran al hacer clic en el toggle "▸".
+      if (subs) {
+        subs.forEach(sc => {
+          const scMatrix = subMatrix[c][sc];
+          const scTotal = periodos.reduce((s, p) => s + (scMatrix[p] || 0), 0);
+          const scCells = periodos.map(p => {
+            const v = scMatrix[p] || 0;
+            return `<td class="mval2" data-cuenta="${escapeHtml(c)}" data-subcuenta="${escapeHtml(sc)}" data-periodo="${p}">${v ? fmtCompact(v) : "—"}</td>`;
+          }).join("");
+          bodyRows.push(`<tr class="matrix-sub-row" data-group="${gid}" style="display:none;"><th class="rowhead rowhead-indent-2">${escapeHtml(sc)}</th>${scCells}<td class="num">${fmtCompact(scTotal)}</td></tr>`);
+        });
+      }
     });
   });
-  tbody.innerHTML = bodyRows.join("");
+  return bodyRows.join("");
+}
 
+/** Engancha los toggles "▸"/"▾" de sub-cuentas y los clics en celdas (nivel
+ * cuenta mayor y nivel sub-cuenta) dentro de un <tbody> ya renderizado con
+ * buildMatrixRowsHtml(). Se separa de renderMatrix() para poder reusarla
+ * tambien en el modal de "Ampliar". */
+function wireMatrixRows(tbody, matrix, periodos) {
+  tbody.querySelectorAll(".matrix-toggle").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const gid = btn.dataset.toggle;
+      const abierta = btn.textContent === "▾";
+      btn.textContent = abierta ? "▸" : "▾";
+      tbody.querySelectorAll(`tr.matrix-sub-row[data-group="${gid}"]`).forEach(tr => {
+        tr.style.display = abierta ? "none" : "table-row";
+      });
+    });
+  });
   tbody.querySelectorAll("td.mval").forEach(td => {
     td.addEventListener("click", () => {
       const cuenta = td.dataset.cuenta, periodo = Number(td.dataset.periodo);
       openMatrixCellModal(cuenta, periodo, matrix, periodos);
     });
   });
+  tbody.querySelectorAll("td.mval2").forEach(td => {
+    td.addEventListener("click", () => {
+      const cuenta = td.dataset.cuenta, subCuenta = td.dataset.subcuenta, periodo = Number(td.dataset.periodo);
+      openMatrixCellModal(cuenta, periodo, matrix, periodos, subCuenta);
+    });
+  });
+}
+
+function renderMatrix(rows) {
+  const built = buildCostMatrix(rows);
+  const { cuentas, periodos, matrix } = built;
+  const thead = document.querySelector("#tbl-matrix thead");
+  const tbody = document.querySelector("#tbl-matrix tbody");
+
+  if (!cuentas.length) {
+    thead.innerHTML = "";
+    tbody.innerHTML = '<tr><td style="padding:20px;color:var(--text-faint);">Sin datos de costos para los filtros actuales.</td></tr>';
+    return;
+  }
+
+  thead.innerHTML = "<tr><th class='rowhead'>Cuenta mayor</th>" + periodos.map(p => `<th class="num">${periodoToLabel(p)}</th>`).join("") + "<th class='num'>Total</th></tr>";
+  tbody.innerHTML = buildMatrixRowsHtml(built);
+  wireMatrixRows(tbody, matrix, periodos);
 }

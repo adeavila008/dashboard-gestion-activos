@@ -54,23 +54,18 @@ function openChartExpandModal(canvasId) {
  * con más alto/ancho, y vuelve a enganchar el clic en cada celda. */
 function openMatrixExpandModal() {
   const rows = getFilteredIBRows({ ignoreMes: true });
-  const { cuentas, periodos, matrix } = buildCostMatrix(rows);
+  const built = buildCostMatrix(rows);
+  const { cuentas, periodos, matrix } = built;
   if (!cuentas.length) { showToast("Ampliar", "No hay datos de costos para los filtros actuales.", "warning"); return; }
 
   const theadHtml = document.querySelector("#tbl-matrix thead").innerHTML;
-  const tbodyHtml = document.querySelector("#tbl-matrix tbody").innerHTML;
   document.getElementById("modal-box").classList.add("modal-box-lg");
   openModal(
     "Matriz mensual de costos por cuenta mayor",
-    "clic en un valor para ver el detalle · aumentos inusuales resaltados en rojo",
-    `<div class="table-wrap table-wrap-scroll-modal-lg"><table class="matrix-table"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table></div>`
+    "clic en ▸ para desglosar por sub-cuenta · clic en un valor para ver el detalle · aumentos inusuales resaltados en rojo",
+    `<div class="table-wrap table-wrap-scroll-modal-lg"><table class="matrix-table"><thead>${theadHtml}</thead><tbody>${buildMatrixRowsHtml(built)}</tbody></table></div>`
   );
-  document.querySelectorAll("#modal-body td.mval").forEach(td => {
-    td.addEventListener("click", () => {
-      const cuenta = td.dataset.cuenta, periodo = Number(td.dataset.periodo);
-      openMatrixCellModal(cuenta, periodo, matrix, periodos);
-    });
-  });
+  wireMatrixRows(document.querySelector("#modal-body tbody"), matrix, periodos);
 }
 
 /* ---------- Exportacion de modales de detalle (Excel / PDF) ----------
@@ -546,16 +541,22 @@ function openCostosTotalesModal(rows) {
   wireModalPeriodoRange(idPrefix, renderContent);
 }
 
-function openMatrixCellModal(cuenta, periodo, matrix, periodos) {
+function openMatrixCellModal(cuenta, periodo, matrix, periodos, subCuenta) {
   const idPrefix = "modal-cell";
-  const rows = getFilteredIBRows({ ignoreMes: true }).filter(r => !r.esIngreso && r.cuentaMayor === cuenta && r.periodo === periodo);
+  const cuentaRowsAll = getFilteredIBRows({ ignoreMes: true }).filter(r => !r.esIngreso && r.cuentaMayor === cuenta && (!subCuenta || r.cuenta === subCuenta));
+  const rows = cuentaRowsAll.filter(r => r.periodo === periodo);
   const idx = periodos.indexOf(periodo);
   const prevPeriodo = idx > 0 ? periodos[idx - 1] : null;
-  const currVal = matrix[cuenta][periodo];
-  const prevVal = prevPeriodo !== null ? matrix[cuenta][prevPeriodo] : null;
+  // A nivel de cuenta mayor se usa la matriz ya calculada; a nivel de
+  // sub-cuenta (cuando se hace clic en una fila desglosada, ej. "SUELDOS"
+  // dentro de "GASTOS DE PERSONAL") se suma directo de las filas filtradas,
+  // porque "matrix" solo trae totales por cuenta mayor.
+  const sumImporte = list => list.reduce((s, r) => s + r.importe, 0);
+  const currVal = subCuenta ? sumImporte(rows) : matrix[cuenta][periodo];
+  const prevVal = prevPeriodo === null ? null : (subCuenta ? sumImporte(cuentaRowsAll.filter(r => r.periodo === prevPeriodo)) : matrix[cuenta][prevPeriodo]);
   const variacion = (prevVal !== null && prevVal !== 0) ? ((currVal - prevVal) / Math.abs(prevVal)) * 100 : null;
   const porEmpleado = costoPorPersonal(rows).slice(0, 8);
-  const titleBase = cuenta;
+  const titleBase = subCuenta ? `${cuenta} — ${subCuenta}` : cuenta;
   const subBase = periodoToLabel(periodo) + " · detalle de la matriz de costos";
 
   function renderContent() {
