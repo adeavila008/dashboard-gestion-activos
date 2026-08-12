@@ -541,6 +541,35 @@ function openCostosTotalesModal(rows) {
   wireModalPeriodoRange(idPrefix, renderContent);
 }
 
+/** Compara las filas del mes actual contra las del mes anterior para una
+ * celda de la matriz, agrupando por EMPLEADO o por TERCERO (el que tenga mas
+ * variedad de datos, ya que en "GASTOS DE PERSONAL" el dato util es el
+ * empleado, pero en cuentas como ARRENDAMIENTOS o SERVICIOS casi siempre el
+ * empleado viene vacio y lo que importa es el tercero/proveedor). Devuelve la
+ * lista ordenada de mayor a menor variacion absoluta -- asi el usuario ve de
+ * una quien/que tercero explica el aumento o la baida de esa cuenta. */
+function buildVariacionBreakdown(currRows, prevRows) {
+  const distinctCount = field => new Set(currRows.concat(prevRows).map(r => r[field]).filter(Boolean)).size;
+  const field = distinctCount("empleado") >= distinctCount("tercero") ? "empleado" : "tercero";
+  const fieldLabel = field === "empleado" ? "Empleado" : "Tercero";
+
+  const sums = list => {
+    const m = {};
+    list.forEach(r => {
+      const k = r[field] || "(sin dato)";
+      m[k] = (m[k] || 0) + r.importe;
+    });
+    return m;
+  };
+  const currSums = sums(currRows), prevSums = sums(prevRows);
+  const keys = new Set([...Object.keys(currSums), ...Object.keys(prevSums)]);
+  const list = [...keys]
+    .map(k => ({ key: k, curr: currSums[k] || 0, prev: prevSums[k] || 0, delta: (currSums[k] || 0) - (prevSums[k] || 0) }))
+    .filter(d => d.delta !== 0)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  return { field, fieldLabel, list };
+}
+
 function openMatrixCellModal(cuenta, periodo, matrix, periodos, subCuenta) {
   const idPrefix = "modal-cell";
   const cuentaRowsAll = getFilteredIBRows({ ignoreMes: true }).filter(r => !r.esIngreso && r.cuentaMayor === cuenta && (!subCuenta || r.cuenta === subCuenta));
@@ -552,10 +581,12 @@ function openMatrixCellModal(cuenta, periodo, matrix, periodos, subCuenta) {
   // dentro de "GASTOS DE PERSONAL") se suma directo de las filas filtradas,
   // porque "matrix" solo trae totales por cuenta mayor.
   const sumImporte = list => list.reduce((s, r) => s + r.importe, 0);
+  const prevRows = prevPeriodo === null ? [] : cuentaRowsAll.filter(r => r.periodo === prevPeriodo);
   const currVal = subCuenta ? sumImporte(rows) : matrix[cuenta][periodo];
-  const prevVal = prevPeriodo === null ? null : (subCuenta ? sumImporte(cuentaRowsAll.filter(r => r.periodo === prevPeriodo)) : matrix[cuenta][prevPeriodo]);
+  const prevVal = prevPeriodo === null ? null : (subCuenta ? sumImporte(prevRows) : matrix[cuenta][prevPeriodo]);
   const variacion = (prevVal !== null && prevVal !== 0) ? ((currVal - prevVal) / Math.abs(prevVal)) * 100 : null;
   const porEmpleado = costoPorPersonal(rows).slice(0, 8);
+  const cambio = prevPeriodo !== null ? buildVariacionBreakdown(rows, prevRows) : null;
   const titleBase = subCuenta ? `${cuenta} — ${subCuenta}` : cuenta;
   const subBase = periodoToLabel(periodo) + " · detalle de la matriz de costos";
 
@@ -566,7 +597,11 @@ function openMatrixCellModal(cuenta, periodo, matrix, periodos, subCuenta) {
         <div class="modal-kpi"><div class="l">${prevPeriodo ? periodoToLabel(prevPeriodo) : "Mes anterior"}</div><div class="v">${prevVal !== null ? fmtCOP(prevVal) : "—"}</div></div>
         <div class="modal-kpi"><div class="l">Variación</div><div class="v" style="color:${variacion === null ? "inherit" : (variacion >= 0 ? "var(--danger)" : "var(--success)")}">${variacion === null ? "—" : (variacion >= 0 ? "+" : "") + variacion.toFixed(1) + "%"}</div></div>
       </div>
-      ${porEmpleado.length ? `<div class="section-title" style="font-size:12px;margin-bottom:6px;">Personal involucrado</div><div class="gerente-list">${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}</div>` : ""}
+      ${cambio && cambio.list.length ? `
+      <div class="section-title" style="font-size:12px;margin-bottom:6px;">¿Qué cambió vs. ${periodoToLabel(prevPeriodo)}? · por ${cambio.fieldLabel.toLowerCase()}</div>
+      <div class="table-wrap" style="margin-bottom:10px;"><table><thead><tr><th>${escapeHtml(cambio.fieldLabel)}</th><th class="num">${periodoToLabel(prevPeriodo)}</th><th class="num">${periodoToLabel(periodo)}</th><th class="num">Variación</th></tr></thead><tbody>
+        ${cambio.list.slice(0, 10).map(d => `<tr><td class="cell-wrap">${escapeHtml(d.key)}</td><td class="num">${d.prev ? fmtCOP(d.prev) : "—"}</td><td class="num">${d.curr ? fmtCOP(d.curr) : "—"}</td><td class="num" style="color:${d.delta >= 0 ? "var(--danger)" : "var(--success)"};font-weight:700;">${d.delta >= 0 ? "+" : ""}${fmtCOP(d.delta)}</td></tr>`).join("")}
+      </tbody></table></div>` : (porEmpleado.length ? `<div class="section-title" style="font-size:12px;margin-bottom:6px;">Personal involucrado</div><div class="gerente-list">${porEmpleado.map(e => `<div class="gerente-row"><span class="name">${escapeHtml(e.label)}</span><span class="pct">${fmtCOP(e.value)}</span></div>`).join("")}</div>` : "")}
       <div class="mt-8"></div>
       ${miniTxTable(rows, 80)}`;
   }

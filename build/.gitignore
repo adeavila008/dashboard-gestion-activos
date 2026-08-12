@@ -1,2 +1,4 @@
 dist/
 source/
+.github_token
+.last_costos_manifest.json

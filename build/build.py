@@ -37,11 +37,20 @@ def main():
     data_baseline = safe_embed(open(os.path.join(BUILD_DIR, "data", "default_baseline.json"), encoding="utf-8").read())
     data_projects = safe_embed(open(os.path.join(BUILD_DIR, "data", "projects_registry.json"), encoding="utf-8").read())
 
+    def read_or_empty(name, empty):
+        path = os.path.join(BUILD_DIR, "data", name)
+        return safe_embed(open(path, encoding="utf-8").read()) if os.path.exists(path) else empty
+
+    data_wip = read_or_empty("wip.json", '{"proyectos":{},"_sourceFile":null}')
+    data_facturacion = read_or_empty("facturacion.json", '{"mesActualizacion":null,"proyectos":{},"_sourceFile":null}')
+
     html = template
     html = html.replace("{{STYLES}}", styles)
     html = html.replace("{{DATA_IBREPORT}}", data_ib)
     html = html.replace("{{DATA_BASELINE}}", data_baseline)
     html = html.replace("{{DATA_PROJECTS}}", data_projects)
+    html = html.replace("{{DATA_WIP}}", data_wip)
+    html = html.replace("{{DATA_FACTURACION}}", data_facturacion)
     html = html.replace("{{BUILD_DATE}}", datetime.now().strftime("%Y-%m-%d %H:%M"))
     html = html.replace("{{SCRIPT}}", script)
 

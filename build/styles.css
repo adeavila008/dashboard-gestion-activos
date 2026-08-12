@@ -369,6 +369,8 @@ tbody tr.clickable{cursor:pointer;}
   color:var(--text-faint);transition:outline .1s;
 }
 .matrix-table td.mval2:hover{outline:1.5px solid var(--secondary);outline-offset:-1.5px;color:var(--text);}
+.matrix-table td.mval2.anomaly{background:rgba(239,91,113,.20)!important;color:#ffd6dc;font-weight:700;}
+.matrix-table td.mval2.anomaly::after{content:" ⚠";font-size:8px;}
 .matrix-table tr.matrix-sub-row td.num{font-size:10.5px;color:var(--text-faint);font-weight:500;}
 .matrix-table tr.matrix-sub-row td,.matrix-table tr.matrix-sub-row th{background:var(--surface-1);}
 

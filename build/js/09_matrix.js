@@ -45,10 +45,12 @@ function buildCostMatrix(rows) {
   // resaltaban por igual subidas y bajadas, usando el valor absoluto del
   // cambio, lo cual hacia ver como "problema" algo que en realidad era una
   // mejora).
-  const anomalies = new Set();
-  const anomalyList = [];
-  cuentas.forEach(c => {
-    const vals = periodos.map(p => matrix[c][p]);
+  /** Aplica el mismo criterio de anomalia (aumento inusual vs. el promedio
+   * historico o vs. el mes anterior) a una serie de valores por periodo, sin
+   * importar si es una cuenta mayor o una sub-cuenta -- se reutiliza para
+   * ambos niveles de la matriz. */
+  function detectAnomaliesInSerie(vals) {
+    const flags = []; // indices (>=1) de "periodos" marcados como anomalia
     const nonZero = vals.filter(v => v !== 0);
     const m = avg(nonZero), sd = stdev(nonZero);
     for (let i = 1; i < periodos.length; i++) {
@@ -57,16 +59,37 @@ function buildCostMatrix(rows) {
       const pctChange = prev !== 0 ? (curr - prev) / Math.abs(prev) : Infinity;
       const zFlag = sd > 0 && (curr - m) > CFG.anomalyZ * sd;       // muy por ENCIMA del promedio
       const pctFlag = pctChange >= CFG.anomalyMinPct && Math.abs(curr) > 250000; // solo aumentos vs. mes anterior
-      if ((zFlag || pctFlag) && Math.abs(curr) > 250000) {
-        const key = c + "|" + periodos[i];
-        anomalies.add(key);
-        anomalyList.push({ cuenta: c, periodo: periodos[i], value: curr, prevValue: prev, pctChange });
-      }
+      if ((zFlag || pctFlag) && Math.abs(curr) > 250000) flags.push({ i, prev, curr, pctChange });
     }
+    return flags;
+  }
+
+  const anomalies = new Set();
+  const anomalyList = [];
+  cuentas.forEach(c => {
+    const vals = periodos.map(p => matrix[c][p]);
+    detectAnomaliesInSerie(vals).forEach(({ i, prev, curr, pctChange }) => {
+      anomalies.add(c + "|" + periodos[i]);
+      anomalyList.push({ cuenta: c, periodo: periodos[i], value: curr, prevValue: prev, pctChange });
+    });
   });
   anomalyList.sort((a, b) => Math.abs(b.value) - Math.abs(a.value) || b.periodo - a.periodo);
 
-  return { cuentas, periodos, matrix, anomalies, anomalyList, categoriaPorCuenta, subCuentasPorMayor, subMatrix };
+  // Mismo chequeo pero a nivel de sub-cuenta (ej. SUELDOS dentro de GASTOS DE
+  // PERSONAL) -- asi un aumento inusual que queda "escondido" dentro del
+  // total de la cuenta mayor tambien se resalta cuando se despliega el
+  // desglose.
+  const subAnomalies = new Set(); // key: cuentaMayor|subcuenta|periodo
+  Object.keys(subCuentasPorMayor).forEach(cm => {
+    subCuentasPorMayor[cm].forEach(sc => {
+      const vals = periodos.map(p => subMatrix[cm][sc][p] || 0);
+      detectAnomaliesInSerie(vals).forEach(({ i }) => {
+        subAnomalies.add(cm + "|" + sc + "|" + periodos[i]);
+      });
+    });
+  });
+
+  return { cuentas, periodos, matrix, anomalies, anomalyList, categoriaPorCuenta, subCuentasPorMayor, subMatrix, subAnomalies };
 }
 
 /** Grupos de la matriz, en el mismo orden/nombre que la clasificacion
@@ -85,7 +108,7 @@ const MATRIX_GRUPOS = [
  * mayor, pero el estado de los toggles (abierto/cerrado) y el data-* de las
  * sub-filas hay que reconstruirlo igual en ambos lados. */
 function buildMatrixRowsHtml(built) {
-  const { cuentas, periodos, matrix, anomalies, categoriaPorCuenta, subCuentasPorMayor, subMatrix } = built;
+  const { cuentas, periodos, matrix, anomalies, categoriaPorCuenta, subCuentasPorMayor, subMatrix, subAnomalies } = built;
   const bodyRows = [];
   let groupSeq = 0;
   MATRIX_GRUPOS.forEach(g => {
@@ -121,7 +144,8 @@ function buildMatrixRowsHtml(built) {
           const scTotal = periodos.reduce((s, p) => s + (scMatrix[p] || 0), 0);
           const scCells = periodos.map(p => {
             const v = scMatrix[p] || 0;
-            return `<td class="mval2" data-cuenta="${escapeHtml(c)}" data-subcuenta="${escapeHtml(sc)}" data-periodo="${p}">${v ? fmtCompact(v) : "—"}</td>`;
+            const isAnom = subAnomalies.has(c + "|" + sc + "|" + p);
+            return `<td class="mval2${isAnom ? " anomaly" : ""}" data-cuenta="${escapeHtml(c)}" data-subcuenta="${escapeHtml(sc)}" data-periodo="${p}">${v ? fmtCompact(v) : "—"}</td>`;
           }).join("");
           bodyRows.push(`<tr class="matrix-sub-row" data-group="${gid}" style="display:none;"><th class="rowhead rowhead-indent-2">${escapeHtml(sc)}</th>${scCells}<td class="num">${fmtCompact(scTotal)}</td></tr>`);
         });
