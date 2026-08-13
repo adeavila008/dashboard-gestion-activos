@@ -209,6 +209,58 @@ function analisisTableHtml(items) {
     </table></div>`;
 }
 
+/** Resumen textual tipo "la variacion entre junio y julio en ESSA se debe
+ * a...": toma los puntos ya detectados (filtrados por el/los mes(es)
+ * elegidos) y los redacta en prosa + listas numeradas, enfocado en el ULTIMO
+ * mes seleccionado (o el ultimo disponible si no hay filtro de mes) vs. el
+ * mes inmediatamente anterior -- asi responde directo "a que se debe el
+ * cambio entre estos dos meses", con la disminucion de ingresos y el
+ * incremento de costos como bloques separados, y las mejoras aparte. */
+function buildResumenNarrativoHtml(filtered, meses, proyectoLabel) {
+  if (!filtered.length) return "";
+  const periodoFoco = meses.length ? Math.max(...meses.map(Number)) : Math.max(...filtered.map(it => it.periodo));
+  const focused = filtered.filter(it => it.periodo === periodoFoco);
+  if (!focused.length) return "";
+  const prevPeriodo = focused[0].prevPeriodo;
+
+  const negIngresos = focused.filter(it => it.tipo === "ingreso" && it.severidad === "alta");
+  const negCostos = focused.filter(it => it.tipo === "costo" && it.severidad === "alta");
+  const posIngresos = focused.filter(it => it.tipo === "ingreso" && it.severidad === "positiva");
+  const posCostos = focused.filter(it => it.tipo === "costo" && it.severidad === "positiva");
+  const margenItem = focused.find(it => it.tipo === "margen");
+
+  const itemLine = it => {
+    const base = `<b>${escapeHtml(it.cuenta)}</b>: ${fmtCOP(it.prevValor)} → ${fmtCOP(it.actualValor)} (${it.deltaValor >= 0 ? "+" : ""}${fmtCOP(it.deltaValor)})`;
+    const quien = it.breakdown.length ? `, principalmente por ${it.breakdownLabel.toLowerCase()} ${it.breakdown.map(d => escapeHtml(d.key) + " (" + (d.delta >= 0 ? "+" : "") + fmtCOP(d.delta) + ")").join(" y ")}` : "";
+    return base + quien;
+  };
+  const pStyle = "font-size:12.5px;color:var(--text-dim);line-height:1.6;margin:0 0 8px;";
+  const olStyle = "font-size:12.5px;color:var(--text-dim);line-height:1.75;margin:0 0 12px 18px;padding:0;";
+
+  let html = `<p style="${pStyle}">La variación entre <b>${periodoToLabel(prevPeriodo)}</b> y <b>${periodoToLabel(periodoFoco)}</b> en <b>${escapeHtml(proyectoLabel)}</b> se explica por:</p>`;
+
+  if (margenItem) {
+    const dir = margenItem.actualValor < 0 && margenItem.prevValor >= 0 ? 'pasó a ser <b style="color:var(--danger)">negativo</b>'
+      : (margenItem.actualValor >= margenItem.prevValor ? "mejoró" : "se deterioró");
+    html += `<p style="${pStyle}">El margen ${dir}: ${fmtPct(margenItem.prevValor)} → ${fmtPct(margenItem.actualValor)}.</p>`;
+  }
+
+  if (negIngresos.length) {
+    html += `<p style="${pStyle}color:var(--danger);font-weight:700;margin-top:12px;">↓ Disminución de ingresos por:</p><ol style="${olStyle}">${negIngresos.map(it => `<li>${itemLine(it)}.</li>`).join("")}</ol>`;
+  }
+  if (negCostos.length) {
+    html += `<p style="${pStyle}color:var(--danger);font-weight:700;margin-top:12px;">↑ Incremento de costos por:</p><ol style="${olStyle}">${negCostos.map(it => `<li>${itemLine(it)}.</li>`).join("")}</ol>`;
+  }
+  const posItems = posIngresos.concat(posCostos);
+  if (posItems.length) {
+    html += `<p style="${pStyle}color:var(--success);font-weight:700;margin-top:12px;">✓ Esto se compensó parcialmente por:</p><ol style="${olStyle}margin-bottom:0;">${posItems.map(it => `<li>${itemLine(it)}.</li>`).join("")}</ol>`;
+  }
+  if (!negIngresos.length && !negCostos.length && !posItems.length) {
+    html += `<p style="font-size:12.5px;color:var(--text-faint);margin:0;">No se detectaron cambios relevantes de ingresos o costos en ${periodoToLabel(periodoFoco)} frente a ${periodoToLabel(prevPeriodo)}.</p>`;
+  }
+  return html;
+}
+
 function renderAnalisisChart(serie) {
   const canvas = document.getElementById("chart-analisis-trend");
   if (!canvas) return;
@@ -267,6 +319,11 @@ function renderAnalisis() {
   const filtered = meses.length ? allInsights.filter(it => meses.includes(String(it.periodo))) : allInsights;
   const negativos = filtered.filter(it => it.severidad === "alta" || it.severidad === "media");
   const positivos = filtered.filter(it => it.severidad === "positiva");
+
+  const proyectoLabel = STATE.analisisFilters.proyecto || "todos los proyectos con movimiento";
+  const resumenEl = document.getElementById("an-resumen");
+  const resumenHtml = buildResumenNarrativoHtml(filtered, meses, proyectoLabel);
+  resumenEl.innerHTML = resumenHtml || '<p class="text-dim" style="font-size:12px;margin:0;">No hay suficiente historial para redactar un resumen con los filtros actuales.</p>';
 
   const hint = document.getElementById("an-hint");
   if (!filtered.length) {
