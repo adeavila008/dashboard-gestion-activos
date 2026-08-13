@@ -21,9 +21,9 @@ function getAnalisisScopedRows() {
  * Financiero (CFG.anomalyMinPct=45%). Ese umbral esta pensado para resaltar
  * en ROJO solo los sobrecostos mas graves dentro de una tabla ya densa; este
  * modulo en cambio es un resumen ejecutivo pensado para responder "a que se
- * debio tal cambio" -- variaciones de doble digito (ej. el +14.7% de SUELDOS
- * jun->jul en ESSA, claramente visible y preguntable aunque no sea un
- * "outlier" estadistico) tambien merecen aparecer aqui. */
+ * debio tal cambio" -- variaciones de doble digito (ej. un +15% en Gastos de
+ * Personal, claramente visible y preguntable aunque no sea un "outlier"
+ * estadistico) tambien merecen aparecer aqui. */
 const ANALISIS_CFG = { anomalyZ: 1.5, anomalyMinPct: 0.12, minAbs: 250000 };
 
 /** Igual al detector de anomalias de la matriz de costos (09_matrix.js), pero
@@ -57,7 +57,8 @@ function negateImporte(rows) {
 
 /** Detecta picos/caidas por cuenta mayor dentro de "rows" (ya sea de costos
  * o de ingresos con el signo ya normalizado) y devuelve un item de analisis
- * por cada uno, con el desglose de quien/que tercero lo explica. */
+ * ESTRUCTURADO (no texto ya armado) por cada uno -- asi renderAnalisis()
+ * puede pintarlo como fila de tabla en vez de parrafo. */
 function cuentaSeriesInsights(rows, periodos, tipoKey, tipoLabel) {
   const out = [];
   const porCuenta = groupBy(rows, r => r.cuentaMayor);
@@ -72,10 +73,12 @@ function cuentaSeriesInsights(rows, periodos, tipoKey, tipoLabel) {
       // Para costos, subir es la mala noticia; para ingresos, bajar lo es.
       const severidad = tipoKey === "costo" ? (subio ? "alta" : "positiva") : (subio ? "positiva" : "alta");
       out.push({
-        tipo: tipoKey, cuenta, periodo: periodos[f.i], prevPeriodo: periodos[f.i - 1],
-        impacto: Math.abs(f.delta), severidad,
-        texto: `${tipoLabel} de <b>${escapeHtml(cuenta)}</b> ${subio ? "subieron" : "bajaron"} de ${fmtCOP(f.prev)} a ${fmtCOP(f.curr)} en ${periodoToLabel(periodos[f.i])} (${subio ? "+" : ""}${fmtCOP(f.delta)}${isFinite(f.pctChange) ? ", " + (f.pctChange >= 0 ? "+" : "") + (f.pctChange * 100).toFixed(0) + "%" : ""} vs. ${periodoToLabel(periodos[f.i - 1])})` +
-          (brk.list.length ? `, principalmente por ${brk.fieldLabel.toLowerCase()}: ${brk.list.slice(0, 3).map(d => escapeHtml(d.key) + " (" + (d.delta >= 0 ? "+" : "") + fmtCOP(d.delta) + ")").join(", ")}.` : "."),
+        tipo: tipoKey, tipoLabel, cuenta,
+        periodo: periodos[f.i], prevPeriodo: periodos[f.i - 1],
+        prevValor: f.prev, actualValor: f.curr, deltaValor: f.delta, deltaPct: f.pctChange,
+        impacto: Math.abs(f.delta), severidad, esMargen: false,
+        breakdownLabel: brk.fieldLabel,
+        breakdown: brk.list.slice(0, 2).map(d => ({ key: d.key, delta: d.delta })),
       });
     });
   });
@@ -104,15 +107,16 @@ function buildAnalisisInsights(rows) {
     const deltaIng = curr.ingresos - prev.ingresos;
     const deltaCos = curr.costos - prev.costos;
     const liderIngresos = Math.abs(deltaIng) >= Math.abs(deltaCos);
-    const causaTexto = liderIngresos
-      ? `principalmente por el cambio en <b>ingresos</b> (${deltaIng >= 0 ? "+" : ""}${fmtCOP(deltaIng)} vs. ${periodoToLabel(prev.periodo)})`
-      : `principalmente por el cambio en <b>costos</b> (${deltaCos >= 0 ? "+" : ""}${fmtCOP(deltaCos)} vs. ${periodoToLabel(prev.periodo)})`;
 
     insights.push({
-      tipo: "margen", periodo: curr.periodo, prevPeriodo: prev.periodo,
+      tipo: "margen", tipoLabel: "Margen", cuenta: null,
+      periodo: curr.periodo, prevPeriodo: prev.periodo,
+      prevValor: prev.margenPct, actualValor: curr.margenPct, deltaValor: deltaMargen, deltaPct: deltaPts,
       impacto: Math.abs(deltaMargen),
       severidad: flipNeg ? "alta" : (flipPos ? "positiva" : (deltaMargen < 0 ? "media" : "positiva")),
-      texto: `El margen ${flipNeg ? "pasó a ser <b>NEGATIVO</b>" : flipPos ? "volvió a ser <b>positivo</b>" : (deltaMargen < 0 ? "se deterioró" : "mejoró")} en ${periodoToLabel(curr.periodo)}: ${fmtPct(prev.margenPct)} → ${fmtPct(curr.margenPct)} (Ingresos ${fmtCOP(curr.ingresos)}, Costos ${fmtCOP(curr.costos)}), ${causaTexto}.`,
+      esMargen: true,
+      breakdownLabel: "Explicado por",
+      breakdown: [{ key: liderIngresos ? "Ingresos" : "Costos", delta: liderIngresos ? deltaIng : deltaCos }],
     });
   }
 
@@ -126,7 +130,7 @@ function buildAnalisisInsights(rows) {
   return insights;
 }
 
-const ANALISIS_MAX_ITEMS = 30;
+const ANALISIS_MAX_ITEMS = 20;
 
 function populateAnalisisFilterOptions() {
   const rows = STATE.ib.rows;
@@ -164,9 +168,87 @@ function updateAnalisisMesLabel() {
   else { btn.textContent = "Mes: " + n + " seleccionados"; btn.classList.add("has-selection"); }
 }
 
+/** Formatea "Anterior"/"Actual" de un item: porcentaje para las filas de
+ * margen, pesos para las de costos/ingresos. */
+function fmtItemValor(it, v) { return it.esMargen ? fmtPct(v) : fmtCOP(v); }
+
+function analisisBreakdownHtml(it) {
+  if (!it.breakdown.length) return "—";
+  return it.breakdown.map(d => `${escapeHtml(d.key)} (${d.delta >= 0 ? "+" : ""}${fmtCOP(d.delta)})`).join(", ");
+}
+
+/** "Variación": para margen se muestra en PUNTOS porcentuales (no tiene
+ * sentido un "% de un %"); para costos/ingresos se muestra el delta en
+ * pesos junto con el cambio porcentual relativo al mes anterior. */
+function analisisVariacionHtml(it) {
+  if (it.esMargen) {
+    const pts = it.deltaPct;
+    return (pts !== null && isFinite(pts)) ? (pts >= 0 ? "+" : "") + fmtNum(pts, 1) + " pts" : "—";
+  }
+  const pctTxt = isFinite(it.deltaPct) ? " (" + (it.deltaPct >= 0 ? "+" : "") + (it.deltaPct * 100).toFixed(0) + "%)" : "";
+  return (it.deltaValor >= 0 ? "+" : "") + fmtCOP(it.deltaValor) + pctTxt;
+}
+
+function analisisTableHtml(items) {
+  if (!items.length) return '<p class="text-dim" style="font-size:12px;padding:8px 2px;">Sin puntos en esta categoría para los filtros actuales.</p>';
+  return `
+    <div class="table-wrap table-wrap-scroll"><table class="analisis-table">
+      <thead><tr><th>Mes</th><th>Tipo</th><th>Cuenta / Concepto</th><th class="num">Mes anterior</th><th class="num">Mes actual</th><th class="num">Variación</th><th>${items[0] ? escapeHtml(items[0].breakdownLabel) : "Explicado por"}</th></tr></thead>
+      <tbody>
+        ${items.map(it => `
+          <tr>
+            <td>${periodoToLabel(it.periodo)}</td>
+            <td>${it.tipoLabel}</td>
+            <td class="cell-wrap">${it.esMargen ? "Margen general" : escapeHtml(it.cuenta)}</td>
+            <td class="num">${fmtItemValor(it, it.prevValor)}</td>
+            <td class="num">${fmtItemValor(it, it.actualValor)}</td>
+            <td class="num" style="font-weight:700;color:${it.severidad === "positiva" ? "var(--success)" : "var(--danger)"}">${analisisVariacionHtml(it)}</td>
+            <td class="cell-wrap">${analisisBreakdownHtml(it)}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table></div>`;
+}
+
+function renderAnalisisChart(serie) {
+  const canvas = document.getElementById("chart-analisis-trend");
+  if (!canvas) return;
+  upsertChart("chart-analisis-trend", {
+    type: "bar",
+    data: {
+      labels: serie.map(s => periodoToLabel(s.periodo)),
+      datasets: [
+        { label: "Ingresos", data: serie.map(s => s.ingresos), backgroundColor: colorWithAlpha(PALETTE.secondary, .85), borderRadius: 5, maxBarThickness: 40, order: 2, datalabels: dlCompactCurrency(PALETTE.secondary) },
+        { label: "Costos", data: serie.map(s => s.costos), backgroundColor: colorWithAlpha(PALETTE.danger, .8), borderRadius: 5, maxBarThickness: 40, order: 2, datalabels: dlCompactCurrency(PALETTE.danger) },
+        { label: "Margen %", data: serie.map(s => s.margenPct), type: "line", yAxisID: "y1", borderColor: PALETTE.primary, backgroundColor: PALETTE.primary, tension: .3, pointRadius: 4, pointBackgroundColor: PALETTE.primary, order: 1, datalabels: dlPercent(PALETTE.primary, 0, { align: "top", offset: 8 }) },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 24 } },
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        y: { ticks: { callback: v => fmtCompact(v) }, grid: { color: "rgba(255,255,255,.05)" } },
+        y1: { position: "right", ticks: { callback: v => v + "%" }, grid: { display: false } },
+        x: { grid: { display: false } },
+      },
+      plugins: {
+        legend: { position: "top", align: "end" },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ": " + (ctx.dataset.yAxisID === "y1" ? fmtPct(ctx.parsed.y) : fmtCOP(ctx.parsed.y)) } },
+      },
+    },
+  });
+}
+
 function renderAnalisis() {
   const scoped = getAnalisisScopedRows();
-  const kpi = computeFinancieroKPIs(scoped);
+  const meses = STATE.analisisFilters.meses;
+
+  // Las tarjetas KPI y la grafica SI respetan el filtro de mes (a diferencia
+  // del motor de deteccion, que necesita la serie completa para comparar
+  // cada mes contra el anterior) -- asi reflejan exactamente "lo que
+  // seleccionaste", no todo el año.
+  const rowsForKpi = meses.length ? scoped.filter(r => meses.includes(String(r.periodo))) : scoped;
+  const kpi = computeFinancieroKPIs(rowsForKpi);
 
   const wrapKpi = document.getElementById("an-kpis");
   wrapKpi.innerHTML =
@@ -175,27 +257,29 @@ function renderAnalisis() {
     kpiCard({ label: "Margen", value: fmtCOP(kpi.margen), icon: ICONS.margen, color: PALETTE.primary, foot: kpi.margen >= 0 ? "Resultado positivo" : "Resultado negativo" }) +
     kpiCard({ label: "Margen %", value: fmtPct(kpi.margenPct), icon: ICONS.margenPct, color: kpi.margenPct >= CFG.metaMargen ? PALETTE.success : PALETTE.warning, foot: "meta ≥ " + CFG.metaMargen + "%" });
 
+  // Grafica: la serie completa del alcance (Proyecto/Año), pero si hay
+  // meses puntuales elegidos se muestra SOLO esos (comparacion enfocada).
+  const serieCompleta = monthlySeries(scoped);
+  const serieChart = meses.length ? serieCompleta.filter(s => meses.includes(String(s.periodo))) : serieCompleta;
+  renderAnalisisChart(serieChart.length ? serieChart : serieCompleta);
+
   const allInsights = buildAnalisisInsights(scoped);
-  const meses = STATE.analisisFilters.meses;
   const filtered = meses.length ? allInsights.filter(it => meses.includes(String(it.periodo))) : allInsights;
-  const shown = filtered.slice(0, ANALISIS_MAX_ITEMS);
+  const negativos = filtered.filter(it => it.severidad === "alta" || it.severidad === "media");
+  const positivos = filtered.filter(it => it.severidad === "positiva");
 
   const hint = document.getElementById("an-hint");
   if (!filtered.length) {
     hint.textContent = scoped.length ? "No se detectaron puntos críticos para los filtros actuales." : "Sin datos para los filtros actuales.";
   } else {
-    hint.textContent = `${filtered.length} punto(s) crítico(s) detectado(s)` + (filtered.length > shown.length ? ` · mostrando los ${shown.length} de mayor impacto` : "") + " · ordenados de mayor a menor impacto.";
+    hint.textContent = `${negativos.length} punto(s) negativo(s) y ${positivos.length} positivo(s) detectados · ordenados de mayor a menor impacto` +
+      ((negativos.length > ANALISIS_MAX_ITEMS || positivos.length > ANALISIS_MAX_ITEMS) ? ` (mostrando los ${ANALISIS_MAX_ITEMS} de mayor impacto por categoría)` : "") + ".";
   }
 
-  const list = document.getElementById("an-list");
-  list.innerHTML = shown.map((it, idx) => `
-    <div class="analisis-item sev-${it.severidad}">
-      <div class="ai-num">${idx + 1}</div>
-      <div class="ai-body">
-        <div class="ai-meta">${periodoToLabel(it.periodo)} · ${it.tipo === "margen" ? "Margen" : it.tipo === "costo" ? "Costos" : "Ingresos"}</div>
-        <div class="ai-text">${it.texto}</div>
-      </div>
-    </div>`).join("");
+  document.getElementById("an-negativos-count").textContent = negativos.length;
+  document.getElementById("an-positivos-count").textContent = positivos.length;
+  document.getElementById("an-negativos-table").innerHTML = analisisTableHtml(negativos.slice(0, ANALISIS_MAX_ITEMS));
+  document.getElementById("an-positivos-table").innerHTML = analisisTableHtml(positivos.slice(0, ANALISIS_MAX_ITEMS));
 }
 
 function wireAnalisisFilters() {

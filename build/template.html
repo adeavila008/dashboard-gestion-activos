@@ -412,9 +412,25 @@
 
       <div class="card">
         <div class="card-head">
-          <div><div class="card-title">Puntos críticos</div><div class="card-hint" id="an-hint">Picos y caídas de costos e ingresos, y giros de margen, detectados automáticamente mes a mes.</div></div>
+          <div><div class="card-title">Comparación de Ingresos vs. Costos</div><div class="card-hint">de los meses seleccionados (o de todo el alcance, si no elegiste ninguno en particular) · barras = valores, línea = margen %</div></div>
         </div>
-        <div class="analisis-list" id="an-list"></div>
+        <div class="chart-wrap"><canvas id="chart-analisis-trend"></canvas></div>
+      </div>
+
+      <div class="card-hint" id="an-hint" style="margin:2px 2px 4px;">Picos y caídas de costos e ingresos, y giros de margen, detectados automáticamente mes a mes.</div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title" style="color:var(--danger);">⚠ Puntos negativos <span class="an-count" id="an-negativos-count">0</span></div><div class="card-hint">sobrecostos y caídas de ingresos/margen que vale la pena revisar</div></div>
+        </div>
+        <div id="an-negativos-table"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title" style="color:var(--success);">✓ Puntos positivos <span class="an-count" id="an-positivos-count">0</span></div><div class="card-hint">ahorros de costos y mejoras de ingresos/margen</div></div>
+        </div>
+        <div id="an-positivos-table"></div>
       </div>
     </section>
   </div>
