@@ -19,6 +19,9 @@ const STATE = {
   saludFilters: {
     proyecto: "", anio: "", mes: "",
   },
+  analisisFilters: {
+    proyecto: "", anio: "", meses: [],
+  },
   wip: { proyectos: {}, _sourceFile: null },
   facturacion: { mesActualizacion: null, proyectos: {}, _sourceFile: null },
   wipFilters: { proyecto: "" },

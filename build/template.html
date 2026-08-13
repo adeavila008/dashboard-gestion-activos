@@ -44,6 +44,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8"/><path d="M8 16h5"/><path d="M8 8h8"/></svg>
         <span class="lbl">WIP y Facturación</span>
       </div>
+      <div class="nav-item" data-view="analisis">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16Z"/><path d="M21 21l-4.35-4.35"/><path d="M11 7v4l3 2"/></svg>
+        <span class="lbl">Análisis general</span>
+      </div>
       <div class="sidebar-section-label">Datos</div>
       <div class="nav-item" id="nav-upload-fin">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
@@ -107,6 +111,11 @@
             <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8"/><path d="M8 16h5"/><path d="M8 8h8"/></svg></div>
             <h3>WIP y Facturación</h3>
             <p>Provisión de ingresos (WIP), saldo pendiente por facturar y proyección de facturación real vs. planeada, por proyecto.</p>
+          </div>
+          <div class="module-card" data-goto="analisis" style="--accent:var(--danger);--accent-soft:rgba(239,91,113,.14);">
+            <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16Z"/><path d="M21 21l-4.35-4.35"/><path d="M11 7v4l3 2"/></svg></div>
+            <h3>Análisis general</h3>
+            <p>Puntos críticos detectados automáticamente: picos y caídas de costos e ingresos, y giros de margen, con quién/qué tercero los explica.</p>
           </div>
         </div>
       </div>
@@ -376,6 +385,36 @@
           <thead><tr><th>Mes</th><th class="num">Saldo WIP</th><th class="num">WIP del mes</th><th class="num">Ajuste</th><th class="num">Facturación real mes</th><th class="num">Facturación real acum.</th><th class="num">Pendiente por facturar</th><th>Observaciones</th></tr></thead>
           <tbody></tbody>
         </table></div>
+      </div>
+    </section>
+
+    <!-- ============ VIEW: ANALISIS GENERAL ============ -->
+    <section class="view" id="view-analisis">
+
+      <div class="filters-bar" id="an-filters">
+        <span class="fb-label">Filtros</span>
+        <div class="chip-select"><select id="an-proyecto"><option value="">Proyecto: todos</option></select></div>
+        <div class="chip-select"><select id="an-anio"><option value="">Año: todos</option></select></div>
+        <div class="multiselect" id="an-mes-wrap">
+          <button type="button" class="multiselect-btn" id="an-mes-btn">Mes: todos</button>
+          <div class="multiselect-panel" id="an-mes-panel">
+            <div class="multiselect-actions">
+              <button type="button" class="multiselect-link" id="an-mes-todos">Todos</button>
+              <button type="button" class="multiselect-link" id="an-mes-ninguno">Ninguno</button>
+            </div>
+            <div class="multiselect-list" id="an-mes-list"></div>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btn-clear-filters-analisis">Limpiar filtros</button>
+      </div>
+
+      <div class="kpi-grid" id="an-kpis"></div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">Puntos críticos</div><div class="card-hint" id="an-hint">Picos y caídas de costos e ingresos, y giros de margen, detectados automáticamente mes a mes.</div></div>
+        </div>
+        <div class="analisis-list" id="an-list"></div>
       </div>
     </section>
   </div>

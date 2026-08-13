@@ -16,9 +16,11 @@ function initApp() {
   wireProjectToggle();
   wireSaludFilters();
   wireWipFilters();
+  wireAnalisisFilters();
 
   populateFinancieroFilterOptions();
   populateSaludFilterOptions();
+  populateAnalisisFilterOptions();
 
   renderHomeStats();
   updateBadgePeriod();

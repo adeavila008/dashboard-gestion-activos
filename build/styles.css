@@ -404,6 +404,27 @@ tbody tr.clickable{cursor:pointer;}
 .matrix-table tr.matrix-sub-row td.num{font-size:10.5px;color:var(--text-faint);font-weight:500;}
 .matrix-table tr.matrix-sub-row td,.matrix-table tr.matrix-sub-row th{background:var(--surface-1);}
 
+/* ---------- Analisis general: lista de puntos criticos ---------- */
+.analisis-list{display:flex;flex-direction:column;gap:8px;}
+.analisis-item{
+  display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:10px;
+  background:var(--surface-2);border-left:3px solid var(--text-faint);
+}
+.analisis-item.sev-alta{border-left-color:var(--danger);}
+.analisis-item.sev-media{border-left-color:var(--warning);}
+.analisis-item.sev-positiva{border-left-color:var(--success);}
+.ai-num{
+  flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:var(--surface-3);
+  display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:800;color:var(--text-dim);
+}
+.analisis-item.sev-alta .ai-num{background:rgba(239,91,113,.22);color:#ffb3bd;}
+.analisis-item.sev-media .ai-num{background:rgba(240,166,58,.22);color:#ffd699;}
+.analisis-item.sev-positiva .ai-num{background:rgba(52,195,120,.2);color:#8fe8bb;}
+.ai-body{min-width:0;}
+.ai-meta{font-size:10.5px;color:var(--text-faint);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;}
+.ai-text{font-size:12.5px;color:var(--text-dim);line-height:1.5;}
+.ai-text b{color:var(--text);}
+
 /* semaforo */
 .sem-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;box-shadow:0 0 0 3px currentColor22;}
 .sem-green{background:var(--success);color:var(--success);}

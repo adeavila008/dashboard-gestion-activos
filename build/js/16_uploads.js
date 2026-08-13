@@ -37,8 +37,10 @@ async function handleIBReportFile(file) {
     if (!rows.length) throw new Error("No se encontraron filas de la Dirección de Gestión de Activos en este archivo.");
     STATE.ib.rows = rows; STATE.ib.source = "upload"; STATE.ib.fileName = file.name;
     STATE.filters = { proyecto: "", anio: "", meses: [], tipo: "", empleado: "", cuenta: "", search: "" };
+    STATE.analisisFilters = { proyecto: "", anio: "", meses: [] };
     STATE.tx.page = 0;
     populateFinancieroFilterOptions();
+    populateAnalisisFilterOptions();
     renderFinanciero();
     renderHomeStats();
     updateBadgePeriod();
