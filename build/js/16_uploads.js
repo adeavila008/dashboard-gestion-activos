@@ -36,7 +36,7 @@ async function handleIBReportFile(file) {
     const rows = parseIBReportWorkbook(wb);
     if (!rows.length) throw new Error("No se encontraron filas de la Dirección de Gestión de Activos en este archivo.");
     STATE.ib.rows = rows; STATE.ib.source = "upload"; STATE.ib.fileName = file.name;
-    STATE.filters = { proyecto: "", anio: "", mes: "", tipo: "", empleado: "", cuenta: "", search: "" };
+    STATE.filters = { proyecto: "", anio: "", meses: [], tipo: "", empleado: "", cuenta: "", search: "" };
     STATE.tx.page = 0;
     populateFinancieroFilterOptions();
     renderFinanciero();

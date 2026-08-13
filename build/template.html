@@ -119,7 +119,16 @@
         <span class="fb-label">Filtros</span>
         <div class="chip-select"><select id="f-proyecto"><option value="">Proyecto: todos</option></select></div>
         <div class="chip-select"><select id="f-anio"><option value="">Año: todos</option></select></div>
-        <div class="chip-select"><select id="f-mes"><option value="">Mes: todos</option></select></div>
+        <div class="multiselect" id="f-mes-wrap">
+          <button type="button" class="multiselect-btn" id="f-mes-btn">Mes: todos</button>
+          <div class="multiselect-panel" id="f-mes-panel">
+            <div class="multiselect-actions">
+              <button type="button" class="multiselect-link" id="f-mes-todos">Todos</button>
+              <button type="button" class="multiselect-link" id="f-mes-ninguno">Ninguno</button>
+            </div>
+            <div class="multiselect-list" id="f-mes-list"></div>
+          </div>
+        </div>
         <div class="chip-select"><select id="f-tipo"><option value="">Tipo: todos</option></select></div>
         <div class="chip-select"><select id="f-empleado"><option value="">Empleado: todos</option></select></div>
         <div class="chip-select"><select id="f-cuenta"><option value="">Cuenta mayor: todas</option></select></div>

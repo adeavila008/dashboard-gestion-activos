@@ -253,6 +253,36 @@ input[type=file]{display:none;}
   border-right:1.5px solid var(--text-faint);border-bottom:1.5px solid var(--text-faint);
   transform:translateY(-70%) rotate(45deg);pointer-events:none;
 }
+.multiselect{position:relative;}
+.multiselect-btn{
+  appearance:none;background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+  padding:7px 26px 7px 12px;border-radius:100px;font-size:12px;font-weight:600;cursor:pointer;
+  position:relative;white-space:nowrap;
+}
+.multiselect-btn:hover{border-color:#324063;}
+.multiselect-btn.has-selection{background:var(--primary-soft);border-color:rgba(240,166,58,.4);color:var(--primary-2);}
+.multiselect-btn::after{
+  content:"";position:absolute;right:10px;top:50%;width:7px;height:7px;
+  border-right:1.5px solid var(--text-faint);border-bottom:1.5px solid var(--text-faint);
+  transform:translateY(-70%) rotate(45deg);pointer-events:none;
+}
+.multiselect-panel{
+  display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:20;min-width:190px;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-card);padding:8px;
+}
+.multiselect-panel.open{display:block;}
+.multiselect-actions{display:flex;gap:10px;padding:2px 6px 6px;border-bottom:1px solid var(--border-soft);margin-bottom:4px;}
+.multiselect-link{background:none;border:none;color:var(--secondary);font-size:11px;font-weight:700;cursor:pointer;padding:0;}
+.multiselect-link:hover{text-decoration:underline;}
+.multiselect-list{max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:1px;}
+.multiselect-item{
+  display:flex;align-items:center;gap:8px;padding:6px 6px;border-radius:6px;cursor:pointer;
+  font-size:12px;color:var(--text-dim);
+}
+.multiselect-item:hover{background:var(--surface-3);color:var(--text);}
+.multiselect-item input{cursor:pointer;accent-color:var(--secondary);}
+
 .search-box{
   display:flex;align-items:center;gap:7px;background:var(--surface-2);
   border:1px solid var(--border);border-radius:100px;padding:6px 12px;min-width:200px;flex:1;

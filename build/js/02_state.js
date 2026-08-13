@@ -13,7 +13,8 @@ const STATE = {
     fileName: null,
   },
   filters: {
-    proyecto: "", anio: "", mes: "", tipo: "", empleado: "", cuenta: "", search: "",
+    // "meses" es un arreglo (multi-seleccion): [] = todos los meses.
+    proyecto: "", anio: "", meses: [], tipo: "", empleado: "", cuenta: "", search: "",
   },
   saludFilters: {
     proyecto: "", anio: "", mes: "",
